@@ -1,0 +1,11 @@
+/tmp
+/.idea
+/templates
+/.vscode
+/.env
+/test*
+.cursor
+/.DS_Store
+/.cursor
+/.claude
+firebase.json

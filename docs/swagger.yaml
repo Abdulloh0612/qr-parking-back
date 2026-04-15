@@ -1,0 +1,634 @@
+basePath: /api/v1
+definitions:
+  admin.AdminLoginRequest:
+    properties:
+      password:
+        example: password123
+        type: string
+      username:
+        example: admin
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  admin.AdminLoginResponse:
+    properties:
+      admin_session:
+        example: true
+        type: boolean
+      tokens:
+        $ref: '#/definitions/admin.TokensResponse'
+    type: object
+  admin.DataResponse:
+    properties:
+      data: {}
+    type: object
+  admin.ErrorResponse:
+    properties:
+      error:
+        example: error message
+        type: string
+    type: object
+  admin.GenerateQRRequest:
+    properties:
+      count:
+        maximum: 1000
+        minimum: 1
+        type: integer
+    required:
+    - count
+    type: object
+  admin.MessageResponse:
+    properties:
+      message:
+        example: operation successful
+        type: string
+    type: object
+  admin.PaginatedResponse:
+    properties:
+      data: {}
+      limit:
+        example: 20
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 100
+        type: integer
+    type: object
+  admin.StatsResponse:
+    properties:
+      active_qr:
+        type: integer
+      blocked_qr:
+        type: integer
+      scans_today:
+        type: integer
+      total_messages:
+        type: integer
+      total_qr_codes:
+        type: integer
+      total_users:
+        type: integer
+      unregistered_qr:
+        type: integer
+    type: object
+  admin.TokensResponse:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+    type: object
+  client.messageBody:
+    properties:
+      message:
+        type: string
+    type: object
+  client.patchMeBody:
+    properties:
+      avatar_url:
+        type: string
+      facebook:
+        type: string
+      first_name:
+        type: string
+      instagram:
+        type: string
+      last_name:
+        type: string
+      telegram:
+        type: string
+      vk:
+        type: string
+      whatsapp:
+        description: 'Socials: omit = skip, "" = delete, "value" = upsert'
+        type: string
+    type: object
+  client.patchVehicleBody:
+    properties:
+      car_model:
+        type: string
+      photo_url:
+        type: string
+      plate_number:
+        type: string
+      telegram_enabled:
+        type: boolean
+    type: object
+  client.refreshBody:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  client.registerBody:
+    properties:
+      phone:
+        type: string
+    type: object
+host: localhost
+info:
+  contact: {}
+  description: Scan a QR code to view vehicle owner info and send them a message.
+  title: QR-Parking API
+  version: "1.0"
+paths:
+  /admin/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates admin with username/password and returns JWT with
+        admin_session=true
+      parameters:
+      - description: Admin credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/admin.AdminLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.AdminLoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/admin.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/admin.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/admin.ErrorResponse'
+      summary: Admin login
+      tags:
+      - Auth
+  /admin/messages:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List all messages (paginated)
+      tags:
+      - Admin
+  /admin/monitoring/health:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Health check (DB + Redis)
+      tags:
+      - Admin
+  /admin/monitoring/metrics:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Platform metrics + DB pool stats
+      tags:
+      - Admin
+  /admin/qrcodes:
+    get:
+      parameters:
+      - description: 'Filter: unregistered | active | blocked'
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List QR codes (paginated, filterable by status)
+      tags:
+      - Admin
+  /admin/qrcodes/{id}/block:
+    patch:
+      parameters:
+      - description: QR code UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Block a QR code
+      tags:
+      - Admin
+  /admin/qrcodes/generate:
+    post:
+      parameters:
+      - description: Count
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/admin.GenerateQRRequest'
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/admin.DataResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate new QR codes (1–1000)
+      tags:
+      - Admin
+  /admin/scans:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List scan events (paginated)
+      tags:
+      - Admin
+  /admin/stats:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.StatsResponse'
+      security:
+      - BearerAuth: []
+      summary: Platform statistics
+      tags:
+      - Admin
+  /admin/users:
+    get:
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List all users (paginated)
+      tags:
+      - Admin
+  /admin/users/{id}:
+    get:
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.DataResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - Admin
+  /admin/users/{id}/block:
+    patch:
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Block (delete) a user
+      tags:
+      - Admin
+  /me:
+    get:
+      description: Returns the authenticated owner's full profile including vehicles
+        and socials.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get own profile
+      tags:
+      - Me
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Updates the authenticated owner's name, avatar and social profiles.
+        Send null/omit a field to leave it unchanged; send "" to delete a social link.
+      parameters:
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.patchMeBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update own profile
+      tags:
+      - Me
+  /me/vehicles/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Updates a vehicle that belongs to the authenticated owner.
+        Omit a field to leave it unchanged.
+      parameters:
+      - description: Vehicle UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.patchVehicleBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a vehicle
+      tags:
+      - Me
+  /qr/{qr_id}:
+    get:
+      description: Returns the owner profile and vehicle info for a registered QR
+        code, or {"registered":false} if not yet registered.
+      parameters:
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get QR code info
+      tags:
+      - QR
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Claims a QR code for the given phone number.
+        If a user with that phone already exists they are linked to this QR.
+        Returns a JWT token pair that the owner uses to edit their profile.
+      parameters:
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
+      - description: Phone number
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.registerBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Register a QR code
+      tags:
+      - QR
+  /qr/{qr_id}/image:
+    get:
+      description: Returns a PNG image of the QR code encoding the scan URL.
+      parameters:
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
+      - default: 256
+        description: Image size in pixels
+        in: query
+        name: size
+        type: integer
+      produces:
+      - image/png
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get QR code as PNG image
+      tags:
+      - QR
+  /qr/{qr_id}/message:
+    post:
+      consumes:
+      - application/json
+      description: Saves the message and sends a Telegram notification to the owner
+        if they have the bot linked.
+      parameters:
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
+      - description: Message text (1–500 chars)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.messageBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Send a message to the QR owner
+      tags:
+      - QR
+  /refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchanges a valid refresh token for a new access+refresh token
+        pair.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.refreshBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Refresh JWT tokens
+      tags:
+      - Me
+securityDefinitions:
+  BearerAuth:
+    description: Admin JWT — enter "Bearer {token}"
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
