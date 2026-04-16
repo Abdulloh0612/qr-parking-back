@@ -101,6 +101,27 @@ func (h *MeHandler) PatchMe(c *fiber.Ctx) error {
 	return specSuccess(c, data)
 }
 
+// GetVehicles godoc
+// @Summary List own vehicles
+// @Description Returns all vehicles belonging to the authenticated owner.
+// @Tags Me
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Router /me/vehicles [get]
+func (h *MeHandler) GetVehicles(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	data, err := h.apiSvc.GetOwnerData(c.Context(), userID)
+	if err != nil {
+		if services.IsSpecNotFound(err) {
+			return specError(c, fiber.StatusNotFound, "NOT_FOUND", err.Error(), nil, nil)
+		}
+		return specInternal(c)
+	}
+	return specSuccess(c, data.Vehicles)
+}
+
 type patchVehicleBody struct {
 	PlateNumber     *string `json:"plate_number"`
 	CarModel        *string `json:"car_model"`

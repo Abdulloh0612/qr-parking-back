@@ -8,7 +8,7 @@ import (
 
 type Message struct {
 	ID          uuid.UUID  `json:"id" db:"id"`
-	QRCodeID    uuid.UUID  `json:"qr_code_id" db:"qr_code_id"`
+	QRCodeID    *string    `json:"qr_code_id,omitempty" db:"qr_code_id"` // = qr_codes.code (nullable after QR deletion)
 	VehicleID   uuid.UUID  `json:"vehicle_id" db:"vehicle_id"`
 	Content     string     `json:"content" db:"content"`
 	SenderName  *string    `json:"sender_name,omitempty" db:"sender_name"`

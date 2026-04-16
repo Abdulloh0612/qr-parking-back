@@ -22,25 +22,22 @@ func NewQRCodeRepo(pool *pgxpool.Pool) *QRCodeRepo {
 	return &QRCodeRepo{pool: pool}
 }
 
-// id=bigint, display_id=uuid, vehicle_id=uuid FK→vehicles.display_id, created_by=uuid FK→users.display_id
-const qrSelectCols = `id, display_id, code, vehicle_id, status, created_by, registered_at, created_at`
+const qrSelectCols = `id, code, vehicle_id, status, created_by, registered_at, created_at`
 
 func scanQR(row interface {
 	Scan(dest ...any) error
 }) (types.QRCode, error) {
 	var qr types.QRCode
 	err := row.Scan(
-		&qr.ID, &qr.DisplayID,
-		&qr.Code, &qr.VehicleID, &qr.Status,
+		&qr.ID, &qr.Code, &qr.VehicleID, &qr.Status,
 		&qr.CreatedBy, &qr.RegisteredAt, &qr.CreatedAt,
 	)
 	return qr, err
 }
 
 func (r *QRCodeRepo) Create(ctx context.Context, qr *types.QRCode) error {
-	// id is BIGSERIAL — auto-generated; display_id is the UUID
-	query := `INSERT INTO qr_codes (display_id, code, status, created_by) VALUES ($1, $2, $3, $4)`
-	_, err := r.pool.Exec(ctx, query, qr.DisplayID, qr.Code, qr.Status, qr.CreatedBy)
+	query := `INSERT INTO qr_codes (code, status, created_by) VALUES ($1, $2, $3)`
+	_, err := r.pool.Exec(ctx, query, qr.Code, qr.Status, qr.CreatedBy)
 	return err
 }
 
@@ -74,18 +71,6 @@ func (r *QRCodeRepo) GetByCodeOrID(ctx context.Context, qrRef string) (*types.QR
 
 func (r *QRCodeRepo) getByNumericID(ctx context.Context, id int64) (*types.QRCode, error) {
 	qr, err := scanQR(r.pool.QueryRow(ctx, `SELECT `+qrSelectCols+` FROM qr_codes WHERE id = $1`, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &qr, nil
-}
-
-// getByDisplayID is used internally for FK-related operations (e.g. scan events).
-func (r *QRCodeRepo) getByDisplayID(ctx context.Context, displayID uuid.UUID) (*types.QRCode, error) {
-	qr, err := scanQR(r.pool.QueryRow(ctx, `SELECT `+qrSelectCols+` FROM qr_codes WHERE display_id = $1`, displayID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

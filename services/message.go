@@ -59,9 +59,10 @@ func (s *MessageService) SendMessageByQRRef(ctx context.Context, qrRef, content 
 		return nil, ErrMessageQRUnavailable
 	}
 
+	code := qr.Code
 	msg := &types.Message{
 		ID:        uuid.New(),
-		QRCodeID:  qr.DisplayID,
+		QRCodeID:  &code,
 		VehicleID: *qr.VehicleID,
 		Content:   content,
 	}

@@ -133,7 +133,7 @@ func (s *APISpecService) GetQRInfo(ctx context.Context, qrRef, ip, userAgent str
 
 	_ = s.scanRepo.Create(ctx, &types.ScanEvent{
 		ID:        uuid.New(),
-		QRCodeID:  qr.DisplayID,
+		QRCodeID:  qr.Code,
 		IPAddress: ip,
 		UserAgent: userAgent,
 	})
@@ -155,7 +155,7 @@ func (s *APISpecService) GetQRInfo(ctx context.Context, qrRef, ip, userAgent str
 	}
 
 	socials, _ := s.socialRepo.GetPublicByUserID(ctx, user.DisplayID)
-	scans, _ := s.scanRepo.CountByQRCodeID(ctx, qr.DisplayID)
+	scans, _ := s.scanRepo.CountByQRCodeID(ctx, qr.Code)
 
 	owner := &QROwnerOut{
 		DisplayID:       user.DisplayID,

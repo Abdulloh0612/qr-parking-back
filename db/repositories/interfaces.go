@@ -12,6 +12,8 @@ type AdminRepository interface {
 	GetByUsername(ctx context.Context, username string) (*types.Admin, error)
 	GetByDisplayID(ctx context.Context, displayID uuid.UUID) (*types.Admin, error)
 	Create(ctx context.Context, username, passwordHash string) (*types.Admin, error)
+	List(ctx context.Context, offset, limit int) ([]types.Admin, int, error)
+	Block(ctx context.Context, displayID uuid.UUID) error
 }
 
 type UserRepository interface {
@@ -37,14 +39,11 @@ type VehicleRepository interface {
 
 type QRCodeRepository interface {
 	Create(ctx context.Context, qr *types.QRCode) error
-	// GetByCode looks up exactly by the code field.
 	GetByCode(ctx context.Context, code string) (*types.QRCode, error)
-	// GetByCodeOrID tries code first; if not found, tries the numeric bigint id.
 	GetByCodeOrID(ctx context.Context, qrRef string) (*types.QRCode, error)
 	GetByVehicleID(ctx context.Context, vehicleID uuid.UUID) ([]types.QRCode, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]types.QRCode, error)
 	Register(ctx context.Context, code string, vehicleID uuid.UUID) error
-	// Block accepts the QR code string or numeric id string.
 	Block(ctx context.Context, qrRef string) error
 	List(ctx context.Context, status string, offset, limit int) ([]types.QRCode, int, error)
 	CountByStatus(ctx context.Context) (map[string]int, error)
@@ -52,8 +51,8 @@ type QRCodeRepository interface {
 
 type ScanEventRepository interface {
 	Create(ctx context.Context, event *types.ScanEvent) error
-	GetByQRCodeID(ctx context.Context, qrCodeID uuid.UUID, offset, limit int) ([]types.ScanEvent, error)
-	CountByQRCodeID(ctx context.Context, qrCodeID uuid.UUID) (int, error)
+	GetByQRCodeID(ctx context.Context, qrCodeID string, offset, limit int) ([]types.ScanEvent, error)
+	CountByQRCodeID(ctx context.Context, qrCodeID string) (int, error)
 	CountToday(ctx context.Context) (int, error)
 	List(ctx context.Context, offset, limit int) ([]types.ScanEvent, int, error)
 }
@@ -61,6 +60,7 @@ type ScanEventRepository interface {
 type MessageRepository interface {
 	Create(ctx context.Context, msg *types.Message) error
 	GetByVehicleID(ctx context.Context, vehicleID uuid.UUID, offset, limit int) ([]types.Message, error)
+	GetByUserID(ctx context.Context, userID uuid.UUID, offset, limit int) ([]types.Message, int, error)
 	MarkDelivered(ctx context.Context, id uuid.UUID) error
 	CountAll(ctx context.Context) (int, error)
 	List(ctx context.Context, offset, limit int) ([]types.Message, int, error)

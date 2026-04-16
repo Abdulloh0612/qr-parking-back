@@ -16,17 +16,19 @@ import (
 )
 
 type AdminHandler struct {
-	qrSvc    *services.QRService
-	userRepo repositories.UserRepository
-	qrRepo   repositories.QRCodeRepository
-	scanRepo repositories.ScanEventRepository
-	msgRepo  repositories.MessageRepository
-	pool     *pgxpool.Pool
-	redis    *redis.Client
-	logger   *zap.Logger
+	adminRepo repositories.AdminRepository
+	qrSvc     *services.QRService
+	userRepo  repositories.UserRepository
+	qrRepo    repositories.QRCodeRepository
+	scanRepo  repositories.ScanEventRepository
+	msgRepo   repositories.MessageRepository
+	pool      *pgxpool.Pool
+	redis     *redis.Client
+	logger    *zap.Logger
 }
 
 func NewAdminHandler(
+	adminRepo repositories.AdminRepository,
 	qrSvc *services.QRService,
 	userRepo repositories.UserRepository,
 	qrRepo repositories.QRCodeRepository,
@@ -37,16 +39,79 @@ func NewAdminHandler(
 	logger *zap.Logger,
 ) *AdminHandler {
 	return &AdminHandler{
-		qrSvc:    qrSvc,
-		userRepo: userRepo,
-		qrRepo:   qrRepo,
-		scanRepo: scanRepo,
-		msgRepo:  msgRepo,
-		pool:     pool,
-		redis:    redis,
-		logger:   logger,
+		adminRepo: adminRepo,
+		qrSvc:     qrSvc,
+		userRepo:  userRepo,
+		qrRepo:    qrRepo,
+		scanRepo:  scanRepo,
+		msgRepo:   msgRepo,
+		pool:      pool,
+		redis:     redis,
+		logger:    logger,
 	}
 }
+
+// ─── Admin management ─────────────────────────────────────────────────────────
+
+// ListAdmins godoc
+// @Summary List all admins (paginated)
+// @Tags Admin
+// @Security BearerAuth
+// @Param page query int false "Page" default(1)
+// @Param limit query int false "Limit" default(20)
+// @Success 200 {object} PaginatedResponse
+// @Router /admin/admins [get]
+func (h *AdminHandler) ListAdmins(c *fiber.Ctx) error {
+	page, limit, offset := parsePage(c)
+	admins, total, err := h.adminRepo.List(c.Context(), offset, limit)
+	if err != nil {
+		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	return paginatedResponse(c, admins, total, page, limit)
+}
+
+// GetAdmin godoc
+// @Summary Get admin by UUID
+// @Tags Admin
+// @Security BearerAuth
+// @Param id path string true "Admin UUID"
+// @Success 200 {object} DataResponse
+// @Router /admin/admins/{id} [get]
+func (h *AdminHandler) GetAdmin(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid admin id")
+	}
+	admin, err := h.adminRepo.GetByDisplayID(c.Context(), id)
+	if err != nil || admin == nil {
+		return errorResponse(c, fiber.StatusNotFound, "admin not found")
+	}
+	return successResponse(c, admin)
+}
+
+// BlockAdmin godoc
+// @Summary Remove an admin account
+// @Tags Admin
+// @Security BearerAuth
+// @Param id path string true "Admin UUID"
+// @Success 200 {object} MessageResponse
+// @Router /admin/admins/{id}/block [patch]
+func (h *AdminHandler) BlockAdmin(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid admin id")
+	}
+	callerID := middleware.GetUserID(c)
+	if callerID == id {
+		return errorResponse(c, fiber.StatusBadRequest, "cannot remove yourself")
+	}
+	if err := h.adminRepo.Block(c.Context(), id); err != nil {
+		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(MessageResponse{Message: "admin removed"})
+}
+
+// ─── Stats ───────────────────────────────────────────────────────────────────
 
 type StatsResponse struct {
 	TotalQRCodes   int `json:"total_qr_codes"`
@@ -67,28 +132,15 @@ type StatsResponse struct {
 func (h *AdminHandler) GetStats(c *fiber.Ctx) error {
 	ctx := c.Context()
 
-	qrCounts, err := h.qrRepo.CountByStatus(ctx)
-	if err != nil {
-		h.logger.Error("stats: count qr", zap.Error(err))
-	}
-	scansToday, err := h.scanRepo.CountToday(ctx)
-	if err != nil {
-		h.logger.Error("stats: count scans", zap.Error(err))
-	}
-	msgCount, err := h.msgRepo.CountAll(ctx)
-	if err != nil {
-		h.logger.Error("stats: count messages", zap.Error(err))
-	}
-	_, userTotal, err := h.userRepo.List(ctx, 0, 1)
-	if err != nil {
-		h.logger.Error("stats: count users", zap.Error(err))
-	}
+	qrCounts, _ := h.qrRepo.CountByStatus(ctx)
+	scansToday, _ := h.scanRepo.CountToday(ctx)
+	msgCount, _ := h.msgRepo.CountAll(ctx)
+	_, userTotal, _ := h.userRepo.List(ctx, 0, 1)
 
 	totalQR := 0
 	for _, v := range qrCounts {
 		totalQR += v
 	}
-
 	return c.JSON(StatsResponse{
 		TotalQRCodes:   totalQR,
 		UnregisteredQR: qrCounts["unregistered"],
@@ -99,6 +151,8 @@ func (h *AdminHandler) GetStats(c *fiber.Ctx) error {
 		TotalMessages:  msgCount,
 	})
 }
+
+// ─── Users ───────────────────────────────────────────────────────────────────
 
 // ListUsers godoc
 // @Summary List all users (paginated)
@@ -118,7 +172,7 @@ func (h *AdminHandler) ListUsers(c *fiber.Ctx) error {
 }
 
 // GetUser godoc
-// @Summary Get user by ID
+// @Summary Get user by UUID
 // @Tags Admin
 // @Security BearerAuth
 // @Param id path string true "User UUID"
@@ -153,6 +207,8 @@ func (h *AdminHandler) BlockUser(c *fiber.Ctx) error {
 	}
 	return c.JSON(MessageResponse{Message: "user blocked"})
 }
+
+// ─── QR codes ────────────────────────────────────────────────────────────────
 
 type GenerateQRRequest struct {
 	Count int `json:"count" validate:"required,min=1,max=1000"`
@@ -191,7 +247,6 @@ func (h *AdminHandler) GenerateQRCodes(c *fiber.Ctx) error {
 	if req.Count <= 0 {
 		req.Count = 1
 	}
-
 	adminID := middleware.GetUserID(c)
 	codes, err := h.qrSvc.GenerateQRCodes(c.Context(), req.Count, adminID)
 	if err != nil {
@@ -204,7 +259,7 @@ func (h *AdminHandler) GenerateQRCodes(c *fiber.Ctx) error {
 // @Summary Block a QR code
 // @Tags Admin
 // @Security BearerAuth
-// @Param id path string true "QR code string (code) or numeric id"
+// @Param id path string true "QR code string or numeric id"
 // @Success 200 {object} MessageResponse
 // @Router /admin/qrcodes/{id}/block [patch]
 func (h *AdminHandler) BlockQR(c *fiber.Ctx) error {
@@ -218,25 +273,14 @@ func (h *AdminHandler) BlockQR(c *fiber.Ctx) error {
 	return c.JSON(MessageResponse{Message: "QR code blocked"})
 }
 
-// ListScans godoc
-// @Summary List scan events (paginated)
-// @Tags Admin
-// @Security BearerAuth
-// @Success 200 {object} PaginatedResponse
-// @Router /admin/scans [get]
-func (h *AdminHandler) ListScans(c *fiber.Ctx) error {
-	page, limit, offset := parsePage(c)
-	scans, total, err := h.scanRepo.List(c.Context(), offset, limit)
-	if err != nil {
-		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-	return paginatedResponse(c, scans, total, page, limit)
-}
+// ─── Messages ────────────────────────────────────────────────────────────────
 
 // ListMessages godoc
 // @Summary List all messages (paginated)
 // @Tags Admin
 // @Security BearerAuth
+// @Param page query int false "Page" default(1)
+// @Param limit query int false "Limit" default(20)
 // @Success 200 {object} PaginatedResponse
 // @Router /admin/messages [get]
 func (h *AdminHandler) ListMessages(c *fiber.Ctx) error {
@@ -247,6 +291,30 @@ func (h *AdminHandler) ListMessages(c *fiber.Ctx) error {
 	}
 	return paginatedResponse(c, messages, total, page, limit)
 }
+
+// GetMessagesByUserID godoc
+// @Summary Get messages by user UUID
+// @Tags Admin
+// @Security BearerAuth
+// @Param user_id path string true "User UUID"
+// @Param page query int false "Page" default(1)
+// @Param limit query int false "Limit" default(20)
+// @Success 200 {object} PaginatedResponse
+// @Router /admin/messages/{user_id} [get]
+func (h *AdminHandler) GetMessagesByUserID(c *fiber.Ctx) error {
+	userID, err := uuid.Parse(c.Params("user_id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid user id")
+	}
+	page, limit, offset := parsePage(c)
+	messages, total, err := h.msgRepo.GetByUserID(c.Context(), userID, offset, limit)
+	if err != nil {
+		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	return paginatedResponse(c, messages, total, page, limit)
+}
+
+// ─── Monitoring ──────────────────────────────────────────────────────────────
 
 // GetMonitoringHealth godoc
 // @Summary Health check (DB + Redis)
@@ -265,7 +333,6 @@ func (h *AdminHandler) GetMonitoringHealth(c *fiber.Ctx) error {
 	if err := h.redis.Ping(ctx).Err(); err != nil {
 		redisStatus = "error: " + err.Error()
 	}
-
 	return c.JSON(fiber.Map{
 		"success": true,
 		"data": fiber.Map{
@@ -285,28 +352,15 @@ func (h *AdminHandler) GetMonitoringHealth(c *fiber.Ctx) error {
 func (h *AdminHandler) GetMonitoringMetrics(c *fiber.Ctx) error {
 	ctx := c.Context()
 
-	qrCounts, err := h.qrRepo.CountByStatus(ctx)
-	if err != nil {
-		h.logger.Error("metrics: count qr", zap.Error(err))
-	}
-	scansToday, err := h.scanRepo.CountToday(ctx)
-	if err != nil {
-		h.logger.Error("metrics: count scans", zap.Error(err))
-	}
-	msgCount, err := h.msgRepo.CountAll(ctx)
-	if err != nil {
-		h.logger.Error("metrics: count messages", zap.Error(err))
-	}
-	_, userTotal, err := h.userRepo.List(ctx, 0, 1)
-	if err != nil {
-		h.logger.Error("metrics: count users", zap.Error(err))
-	}
+	qrCounts, _ := h.qrRepo.CountByStatus(ctx)
+	scansToday, _ := h.scanRepo.CountToday(ctx)
+	msgCount, _ := h.msgRepo.CountAll(ctx)
+	_, userTotal, _ := h.userRepo.List(ctx, 0, 1)
 
 	totalQR := 0
 	for _, v := range qrCounts {
 		totalQR += v
 	}
-
 	return c.JSON(fiber.Map{
 		"success": true,
 		"data": fiber.Map{
@@ -323,7 +377,8 @@ func (h *AdminHandler) GetMonitoringMetrics(c *fiber.Ctx) error {
 	})
 }
 
-// parsePage extracts page/limit/offset query params.
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 func parsePage(c *fiber.Ctx) (page, limit, offset int) {
 	page, _ = strconv.Atoi(c.Query("page", "1"))
 	limit, _ = strconv.Atoi(c.Query("limit", "20"))

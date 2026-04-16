@@ -28,7 +28,7 @@ import (
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Admin JWT — enter "Bearer {token}"
+// @description Enter "Bearer {token}"
 
 type Server struct {
 	app      *fiber.App
@@ -55,9 +55,12 @@ func New() (*Server, error) {
 
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
-	qrH := clienthandler.NewQRHandler(s.QR, s.APISpec, s.Message, s.JWTMgr)
+	qrH := clienthandler.NewQRHandler(s.QR, s.APISpec, s.Message, s.JWTMgr, s.OTP)
 	meH := clienthandler.NewMeHandler(s.APISpec)
-	adminH := adminhandler.NewAdminHandler(s.QR, s.UserRepo, s.QRRepo, s.ScanRepo, s.MsgRepo, s.Pool, s.Redis, s.Logger)
+	adminH := adminhandler.NewAdminHandler(
+		s.AdminRepo, s.QR, s.UserRepo, s.QRRepo, s.ScanRepo, s.MsgRepo,
+		s.Pool, s.Redis, s.Logger,
+	)
 	authH := adminhandler.NewAuthHandler(s.Auth)
 
 	api := app.Group("/api/v1")
@@ -65,30 +68,30 @@ func New() (*Server, error) {
 	// ── Public QR endpoints ───────────────────────────────────────────────────
 	api.Get("/qr/:qr_id", qrH.GetQR)
 	api.Post("/qr/:qr_id", qrH.RegisterQR)
-	api.Get("/qr/:qr_id/image", qrH.GetQRImage)
-	api.Post("/qr/:qr_id/message", middleware.APISpecMessageRateLimit(s.Redis), qrH.PostQRMessage)
+	api.Post("/qr-verify/:qr_id", qrH.VerifyQR)
+	api.Post("/qr-message/:qr_id", qrH.PostQRMessage)
 
 	// ── Owner self-management (JWT required) ──────────────────────────────────
 	me := api.Group("/me", middleware.JWTAuth(s.JWTMgr))
 	me.Get("", meH.GetMe)
 	me.Patch("", meH.PatchMe)
+	me.Get("/vehicles", meH.GetVehicles)
 	me.Patch("/vehicles/:id", meH.PatchVehicle)
 
 	// ── Admin endpoints ───────────────────────────────────────────────────────
 	api.Post("/admin/login", authH.AdminLogin)
 
 	admin := api.Group("/admin", middleware.JWTAuth(s.JWTMgr), middleware.AdminOnly())
-	admin.Get("/stats", adminH.GetStats)
+	admin.Get("/admins", adminH.ListAdmins)
+	admin.Get("/admins/:id", adminH.GetAdmin)
+	admin.Patch("/admins/:id/block", adminH.BlockAdmin)
 	admin.Get("/users", adminH.ListUsers)
 	admin.Get("/users/:id", adminH.GetUser)
 	admin.Patch("/users/:id/block", adminH.BlockUser)
-	admin.Get("/qrcodes", adminH.ListQRCodes)
 	admin.Post("/qrcodes/generate", adminH.GenerateQRCodes)
 	admin.Patch("/qrcodes/:id/block", adminH.BlockQR)
-	admin.Get("/scans", adminH.ListScans)
 	admin.Get("/messages", adminH.ListMessages)
-	admin.Get("/monitoring/health", adminH.GetMonitoringHealth)
-	admin.Get("/monitoring/metrics", adminH.GetMonitoringMetrics)
+	admin.Get("/messages/:user_id", adminH.GetMessagesByUserID)
 
 	return &Server{app: app, services: s}, nil
 }

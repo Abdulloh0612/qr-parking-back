@@ -44,7 +44,6 @@ func (s *QRService) GenerateQRCodes(ctx context.Context, count int, adminID uuid
 		}
 
 		qr := types.QRCode{
-			DisplayID: uuid.New(),
 			Code:      code,
 			Status:    types.QRStatusUnregistered,
 			CreatedBy: &adminID,

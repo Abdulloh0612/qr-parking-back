@@ -9,17 +9,19 @@ import (
 type Services struct {
 	Essentials
 
-	// Repositories accessed directly by admin handlers
-	UserRepo repositories.UserRepository
-	QRRepo   repositories.QRCodeRepository
-	ScanRepo repositories.ScanEventRepository
-	MsgRepo  repositories.MessageRepository
+	// Repositories accessed directly by handlers
+	AdminRepo repositories.AdminRepository
+	UserRepo  repositories.UserRepository
+	QRRepo    repositories.QRCodeRepository
+	ScanRepo  repositories.ScanEventRepository
+	MsgRepo   repositories.MessageRepository
 
 	// Application services
 	Auth    *services.AuthService
 	QR      *services.QRService
 	APISpec *services.APISpecService
 	Message *services.MessageService
+	OTP     *services.OTPService
 }
 
 func NewServices(e Essentials) Services {
@@ -36,9 +38,11 @@ func NewServices(e Essentials) Services {
 	qrSvc := services.NewQRService(qrRepo, e.Logger, e.Vars[AppBaseURLVar])
 	apiSpecSvc := services.NewAPISpecService(userRepo, vehicleRepo, qrRepo, socialRepo, scanRepo)
 	msgSvc := services.NewMessageService(msgRepo, qrRepo, vehicleRepo, userRepo, tgRepo, e.Logger, e.Vars[TGBotTokenVar])
+	otpSvc := services.NewOTPService(e.Redis, e.Logger)
 
 	return Services{
 		Essentials: e,
+		AdminRepo:  adminRepo,
 		UserRepo:   userRepo,
 		QRRepo:     qrRepo,
 		ScanRepo:   scanRepo,
@@ -47,5 +51,6 @@ func NewServices(e Essentials) Services {
 		QR:         qrSvc,
 		APISpec:    apiSpecSvc,
 		Message:    msgSvc,
+		OTP:        otpSvc,
 	}
 }
