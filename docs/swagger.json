@@ -6,9 +6,106 @@
         "contact": {},
         "version": "1.0"
     },
-    "host": "localhost",
+    "host": "qr-parking-back.abdullokh.com",
     "basePath": "/api/v1",
     "paths": {
+        "/admin/admins": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List all admins (paginated)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.PaginatedResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/admins/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Get admin by UUID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.DataResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/admins/{id}/block": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Remove an admin account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.MessageResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/login": {
             "post": {
                 "description": "Authenticates admin with username/password and returns JWT with admin_session=true",
@@ -72,6 +169,66 @@
                     "Admin"
                 ],
                 "summary": "List all messages (paginated)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.PaginatedResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/messages/{user_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Get messages by user UUID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -215,7 +372,7 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "QR code UUID",
+                        "description": "QR code string or numeric id",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -226,27 +383,6 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/admin.MessageResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/scans": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "tags": [
-                    "Admin"
-                ],
-                "summary": "List scan events (paginated)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/admin.PaginatedResponse"
                         }
                     }
                 }
@@ -320,7 +456,7 @@
                 "tags": [
                     "Admin"
                 ],
-                "summary": "Get user by ID",
+                "summary": "Get user by UUID",
                 "parameters": [
                     {
                         "type": "string",
@@ -455,6 +591,39 @@
                 }
             }
         },
+        "/me/vehicles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all vehicles belonging to the authenticated owner.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Me"
+                ],
+                "summary": "List own vehicles",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/me/vehicles/{id}": {
             "patch": {
                 "security": [
@@ -523,141 +692,7 @@
                 }
             }
         },
-        "/qr/{qr_id}": {
-            "get": {
-                "description": "Returns the owner profile and vehicle info for a registered QR code, or {\"registered\":false} if not yet registered.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "QR"
-                ],
-                "summary": "Get QR code info",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "QR code",
-                        "name": "qr_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "Claims a QR code for the given phone number.\nIf a user with that phone already exists they are linked to this QR.\nReturns a JWT token pair that the owner uses to edit their profile.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "QR"
-                ],
-                "summary": "Register a QR code",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "QR code",
-                        "name": "qr_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Phone number",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/client.registerBody"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/qr/{qr_id}/image": {
-            "get": {
-                "description": "Returns a PNG image of the QR code encoding the scan URL.",
-                "produces": [
-                    "image/png"
-                ],
-                "tags": [
-                    "QR"
-                ],
-                "summary": "Get QR code as PNG image",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "QR code",
-                        "name": "qr_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "default": 256,
-                        "description": "Image size in pixels",
-                        "name": "size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "file"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/qr/{qr_id}/message": {
+        "/qr-message/{qr_id}": {
             "post": {
                 "description": "Saves the message and sends a Telegram notification to the owner if they have the bot linked.",
                 "consumes": [
@@ -713,9 +748,9 @@
                 }
             }
         },
-        "/refresh": {
+        "/qr-verify/{qr_id}": {
             "post": {
-                "description": "Exchanges a valid refresh token for a new access+refresh token pair.",
+                "description": "Verifies the OTP, creates or links the user by phone,\nthen returns an access token valid for 30 days.",
                 "consumes": [
                     "application/json"
                 ],
@@ -723,17 +758,115 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Me"
+                    "QR"
                 ],
-                "summary": "Refresh JWT tokens",
+                "summary": "Verify OTP and register the QR code",
                 "parameters": [
                     {
-                        "description": "Refresh token",
+                        "type": "string",
+                        "description": "QR code",
+                        "name": "qr_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Phone + OTP",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/client.refreshBody"
+                            "$ref": "#/definitions/client.verifyBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/qr/{qr_id}": {
+            "get": {
+                "description": "Returns the full owner profile and vehicle linked to this QR code.\nReturns {\"registered\":false} if the code is not yet claimed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "QR"
+                ],
+                "summary": "Get QR code info",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "QR code",
+                        "name": "qr_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Validates the QR code and sends a 6-digit OTP to the given phone number.\nThe OTP is valid for 5 minutes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "QR"
+                ],
+                "summary": "Send OTP to phone number",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "QR code",
+                        "name": "qr_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Phone number",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/client.registerBody"
                         }
                     }
                 ],
@@ -745,11 +878,53 @@
                             "additionalProperties": true
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/qr/{qr_id}/image": {
+            "get": {
+                "produces": [
+                    "image/png"
+                ],
+                "tags": [
+                    "QR"
+                ],
+                "summary": "Get QR code as PNG image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "QR code",
+                        "name": "qr_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 256,
+                        "description": "Image size in pixels",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
                         }
                     }
                 }
@@ -935,17 +1110,20 @@
                 }
             }
         },
-        "client.refreshBody": {
+        "client.registerBody": {
             "type": "object",
             "properties": {
-                "refresh_token": {
+                "phone": {
                     "type": "string"
                 }
             }
         },
-        "client.registerBody": {
+        "client.verifyBody": {
             "type": "object",
             "properties": {
+                "otp": {
+                    "type": "string"
+                },
                 "phone": {
                     "type": "string"
                 }
@@ -954,7 +1132,7 @@
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "Admin JWT — enter \"Bearer {token}\"",
+            "description": "Enter \"Bearer {token}\"",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

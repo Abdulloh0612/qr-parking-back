@@ -45,7 +45,7 @@ seed-down:
 swagger:
 	@echo "Generating Swagger documentation..."
 	@go run github.com/swaggo/swag/cmd/swag@latest init -g server/server.go -o docs --parseDependency --parseInternal --exclude ./templates,./migrations,./docker
-	@echo "Done: http://localhost:$${SERVER_PORT:-8090}/swagger/index.html"
+	@echo "Done: http://$${APP_BASE_URL:-localhost:8090}/swagger/index.html"
 
 swagger-fmt:
 	@echo "Formatting Swagger comments..."

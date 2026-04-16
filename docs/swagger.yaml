@@ -120,23 +120,84 @@ definitions:
       telegram_enabled:
         type: boolean
     type: object
-  client.refreshBody:
-    properties:
-      refresh_token:
-        type: string
-    type: object
   client.registerBody:
     properties:
       phone:
         type: string
     type: object
-host: localhost
+  client.verifyBody:
+    properties:
+      otp:
+        type: string
+      phone:
+        type: string
+    type: object
+host: qr-parking-back.abdullokh.com
 info:
   contact: {}
   description: Scan a QR code to view vehicle owner info and send them a message.
   title: QR-Parking API
   version: "1.0"
 paths:
+  /admin/admins:
+    get:
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List all admins (paginated)
+      tags:
+      - Admin
+  /admin/admins/{id}:
+    get:
+      parameters:
+      - description: Admin UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.DataResponse'
+      security:
+      - BearerAuth: []
+      summary: Get admin by UUID
+      tags:
+      - Admin
+  /admin/admins/{id}/block:
+    patch:
+      parameters:
+      - description: Admin UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove an admin account
+      tags:
+      - Admin
   /admin/login:
     post:
       consumes:
@@ -174,6 +235,17 @@ paths:
       - Auth
   /admin/messages:
     get:
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
       responses:
         "200":
           description: OK
@@ -182,6 +254,34 @@ paths:
       security:
       - BearerAuth: []
       summary: List all messages (paginated)
+      tags:
+      - Admin
+  /admin/messages/{user_id}:
+    get:
+      parameters:
+      - description: User UUID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: Get messages by user UUID
       tags:
       - Admin
   /admin/monitoring/health:
@@ -240,7 +340,7 @@ paths:
   /admin/qrcodes/{id}/block:
     patch:
       parameters:
-      - description: QR code UUID
+      - description: QR code string or numeric id
         in: path
         name: id
         required: true
@@ -272,18 +372,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Generate new QR codes (1–1000)
-      tags:
-      - Admin
-  /admin/scans:
-    get:
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/admin.PaginatedResponse'
-      security:
-      - BearerAuth: []
-      summary: List scan events (paginated)
       tags:
       - Admin
   /admin/stats:
@@ -336,7 +424,7 @@ paths:
             $ref: '#/definitions/admin.DataResponse'
       security:
       - BearerAuth: []
-      summary: Get user by ID
+      summary: Get user by UUID
       tags:
       - Admin
   /admin/users/{id}/block:
@@ -415,6 +503,27 @@ paths:
       summary: Update own profile
       tags:
       - Me
+  /me/vehicles:
+    get:
+      description: Returns all vehicles belonging to the authenticated owner.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List own vehicles
+      tags:
+      - Me
   /me/vehicles/{id}:
     patch:
       consumes:
@@ -462,102 +571,7 @@ paths:
       summary: Update a vehicle
       tags:
       - Me
-  /qr/{qr_id}:
-    get:
-      description: Returns the owner profile and vehicle info for a registered QR
-        code, or {"registered":false} if not yet registered.
-      parameters:
-      - description: QR code
-        in: path
-        name: qr_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get QR code info
-      tags:
-      - QR
-    post:
-      consumes:
-      - application/json
-      description: |-
-        Claims a QR code for the given phone number.
-        If a user with that phone already exists they are linked to this QR.
-        Returns a JWT token pair that the owner uses to edit their profile.
-      parameters:
-      - description: QR code
-        in: path
-        name: qr_id
-        required: true
-        type: string
-      - description: Phone number
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/client.registerBody'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Register a QR code
-      tags:
-      - QR
-  /qr/{qr_id}/image:
-    get:
-      description: Returns a PNG image of the QR code encoding the scan URL.
-      parameters:
-      - description: QR code
-        in: path
-        name: qr_id
-        required: true
-        type: string
-      - default: 256
-        description: Image size in pixels
-        in: query
-        name: size
-        type: integer
-      produces:
-      - image/png
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: file
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get QR code as PNG image
-      tags:
-      - QR
-  /qr/{qr_id}/message:
+  /qr-message/{qr_id}:
     post:
       consumes:
       - application/json
@@ -596,19 +610,57 @@ paths:
       summary: Send a message to the QR owner
       tags:
       - QR
-  /refresh:
+  /qr-verify/{qr_id}:
     post:
       consumes:
       - application/json
-      description: Exchanges a valid refresh token for a new access+refresh token
-        pair.
+      description: |-
+        Verifies the OTP, creates or links the user by phone,
+        then returns an access token valid for 30 days.
       parameters:
-      - description: Refresh token
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
+      - description: Phone + OTP
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/client.refreshBody'
+          $ref: '#/definitions/client.verifyBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Verify OTP and register the QR code
+      tags:
+      - QR
+  /qr/{qr_id}:
+    get:
+      description: |-
+        Returns the full owner profile and vehicle linked to this QR code.
+        Returns {"registered":false} if the code is not yet claimed.
+      parameters:
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -617,17 +669,79 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "401":
-          description: Unauthorized
+        "404":
+          description: Not Found
           schema:
             additionalProperties: true
             type: object
-      summary: Refresh JWT tokens
+      summary: Get QR code info
       tags:
-      - Me
+      - QR
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Validates the QR code and sends a 6-digit OTP to the given phone number.
+        The OTP is valid for 5 minutes.
+      parameters:
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
+      - description: Phone number
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.registerBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Send OTP to phone number
+      tags:
+      - QR
+  /qr/{qr_id}/image:
+    get:
+      parameters:
+      - description: QR code
+        in: path
+        name: qr_id
+        required: true
+        type: string
+      - default: 256
+        description: Image size in pixels
+        in: query
+        name: size
+        type: integer
+      produces:
+      - image/png
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      summary: Get QR code as PNG image
+      tags:
+      - QR
 securityDefinitions:
   BearerAuth:
-    description: Admin JWT — enter "Bearer {token}"
+    description: Enter "Bearer {token}"
     in: header
     name: Authorization
     type: apiKey

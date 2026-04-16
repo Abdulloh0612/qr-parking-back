@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	_ "qr-parking/docs"
 	"syscall"
 	"time"
 
@@ -23,7 +22,7 @@ import (
 // @title QR-Parking API
 // @version 1.0
 // @description Scan a QR code to view vehicle owner info and send them a message.
-// @host {{.Host}}
+// @host qr-parking-back.abdullokh.com
 // @BasePath /api/v1
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -37,6 +36,7 @@ type Server struct {
 
 func New() (*Server, error) {
 	e := NewEssentials()
+	applySwaggerFromBaseURL(e.Vars[AppBaseURLVar])
 	s := NewServices(e)
 
 	app := fiber.New(fiber.Config{
@@ -53,7 +53,7 @@ func New() (*Server, error) {
 		AllowMethods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
 	}))
 
-	app.Get("/swagger/*", swagger.HandlerDefault)
+	app.Get("/swagger/*", swagger.New(swagger.Config{InstanceName: "swagger"}))
 
 	qrH := clienthandler.NewQRHandler(s.QR, s.APISpec, s.Message, s.JWTMgr, s.OTP)
 	meH := clienthandler.NewMeHandler(s.APISpec)
