@@ -23,7 +23,7 @@ import (
 // @title QR-Parking API
 // @version 1.0
 // @description Scan a QR code to view vehicle owner info and send them a message.
-// @host localhost:8090
+// @host {{.Host}}
 // @BasePath /api/v1
 // @securityDefinitions.apikey BearerAuth
 // @in header

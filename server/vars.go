@@ -17,18 +17,18 @@ const (
 	ServerReadTimeoutVar  = "SERVER_READ_TIMEOUT"
 	ServerWriteTimeoutVar = "SERVER_WRITE_TIMEOUT"
 
-	DatabaseURLVar        = "DATABASE_URL"
-	DBMaxConnsVar         = "DB_MAX_CONNS"
-	DBMinConnsVar         = "DB_MIN_CONNS"
-	DBMaxConnLifetimeVar  = "DB_MAX_CONN_LIFETIME"
+	DatabaseURLVar       = "DATABASE_URL"
+	DBMaxConnsVar        = "DB_MAX_CONNS"
+	DBMinConnsVar        = "DB_MIN_CONNS"
+	DBMaxConnLifetimeVar = "DB_MAX_CONN_LIFETIME"
 
 	RedisURLVar      = "REDIS_URL"
 	RedisPasswordVar = "REDIS_PASSWORD"
 	RedisDBVar       = "REDIS_DB"
 
-	JWTSecretVar      = "JWT_SECRET"
-	JWTAccessTTLVar   = "JWT_ACCESS_TTL"
-	JWTRefreshTTLVar  = "JWT_REFRESH_TTL"
+	JWTSecretVar     = "JWT_SECRET"
+	JWTAccessTTLVar  = "JWT_ACCESS_TTL"
+	JWTRefreshTTLVar = "JWT_REFRESH_TTL"
 
 	TGBotTokenVar    = "TG_BOT_TOKEN"
 	TGBotUsernameVar = "TG_BOT_USERNAME"
