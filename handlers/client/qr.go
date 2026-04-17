@@ -176,7 +176,8 @@ func (h *QRHandler) VerifyQR(c *fiber.Ctx) error {
 // ─── QR message ───────────────────────────────────────────────────────────────
 
 type messageBody struct {
-	Message string `json:"message"`
+	Message  string  `json:"message"`
+	MediaURL *string `json:"media_url"`
 }
 
 // PostQRMessage godoc
@@ -186,7 +187,7 @@ type messageBody struct {
 // @Accept json
 // @Produce json
 // @Param qr_id path string true "QR code"
-// @Param body body messageBody true "Message text (1–500 chars)"
+// @Param body body messageBody true "Message text (1–500 chars) and optional media_url"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
@@ -204,7 +205,7 @@ func (h *QRHandler) PostQRMessage(c *fiber.Ctx) error {
 			map[string]string{"message": "Некорректное сообщение"}, nil)
 	}
 
-	_, err := h.msgSvc.SendMessageByQRRef(c.Context(), c.Params("qr_id"), msg)
+	_, err := h.msgSvc.SendMessageByQRRef(c.Context(), c.Params("qr_id"), msg, body.MediaURL)
 	if err != nil {
 		if err == services.ErrMessageQRUnavailable {
 			return specError(c, fiber.StatusNotFound, "NOT_FOUND", "QR код не найден или не зарегистрирован", nil, nil)

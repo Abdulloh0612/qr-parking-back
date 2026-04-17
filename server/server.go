@@ -54,6 +54,7 @@ func New() (*Server, error) {
 	}))
 
 	app.Get("/swagger/*", swagger.New(swagger.Config{InstanceName: "swagger"}))
+	app.Static("/uploads", "./uploads")
 
 	qrH := clienthandler.NewQRHandler(s.QR, s.APISpec, s.Message, s.JWTMgr, s.OTP)
 	meH := clienthandler.NewMeHandler(s.APISpec)
@@ -70,6 +71,7 @@ func New() (*Server, error) {
 	api.Post("/qr/:qr_id", qrH.RegisterQR)
 	api.Post("/qr-verify/:qr_id", qrH.VerifyQR)
 	api.Post("/qr-message/:qr_id", qrH.PostQRMessage)
+	api.Post("/upload", clienthandler.UploadMedia(e.Vars[AppBaseURLVar]))
 
 	// ── Owner self-management (JWT required) ──────────────────────────────────
 	me := api.Group("/me", middleware.JWTAuth(s.JWTMgr))

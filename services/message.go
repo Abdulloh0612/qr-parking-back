@@ -50,7 +50,7 @@ func NewMessageService(
 }
 
 // SendMessageByQRRef saves a message for an active QR and notifies the owner via Telegram if linked.
-func (s *MessageService) SendMessageByQRRef(ctx context.Context, qrRef, content string) (*types.Message, error) {
+func (s *MessageService) SendMessageByQRRef(ctx context.Context, qrRef, content string, mediaURL *string) (*types.Message, error) {
 	qr, err := s.qrRepo.GetByCodeOrID(ctx, qrRef)
 	if err != nil {
 		return nil, fmt.Errorf("get qr: %w", err)
@@ -65,20 +65,21 @@ func (s *MessageService) SendMessageByQRRef(ctx context.Context, qrRef, content 
 		QRCodeID:  &code,
 		VehicleID: *qr.VehicleID,
 		Content:   content,
+		MediaURL:  mediaURL,
 	}
 	if err := s.messageRepo.Create(ctx, msg); err != nil {
 		return nil, fmt.Errorf("save message: %w", err)
 	}
 
 	vehicleID := qr.VehicleID
-	go s.notifyOwner(vehicleID, content)
+	go s.notifyOwner(vehicleID, content, mediaURL)
 
 	return msg, nil
 }
 
 // notifyOwner finds the vehicle owner's linked Telegram account and sends them a message.
 // Runs in a goroutine — errors are logged, not propagated.
-func (s *MessageService) notifyOwner(vehicleID *uuid.UUID, text string) {
+func (s *MessageService) notifyOwner(vehicleID *uuid.UUID, text string, mediaURL *string) {
 	if vehicleID == nil || s.botToken == "" {
 		return
 	}
@@ -102,6 +103,9 @@ func (s *MessageService) notifyOwner(vehicleID *uuid.UUID, text string) {
 		"📩 Вам написали о вашем автомобиле\n\n%s %s\n\n%s",
 		veh.CarModel, veh.PlateNumber, text,
 	)
+	if mediaURL != nil && *mediaURL != "" {
+		notification += fmt.Sprintf("\n\n🖼 Прикреплён файл: %s", *mediaURL)
+	}
 	if err := sendTelegramMessage(s.botToken, tgAcc.TgUserID, notification); err != nil {
 		s.logger.Warn("telegram notification failed", zap.Error(err))
 	}

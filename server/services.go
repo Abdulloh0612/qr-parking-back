@@ -36,7 +36,7 @@ func NewServices(e Essentials) Services {
 
 	authSvc := services.NewAuthService(adminRepo, e.JWTMgr)
 	qrSvc := services.NewQRService(qrRepo, e.Logger, e.Vars[AppBaseURLVar])
-	apiSpecSvc := services.NewAPISpecService(userRepo, vehicleRepo, qrRepo, socialRepo, scanRepo)
+	apiSpecSvc := services.NewAPISpecService(userRepo, vehicleRepo, qrRepo, socialRepo, scanRepo, tgRepo)
 	msgSvc := services.NewMessageService(msgRepo, qrRepo, vehicleRepo, userRepo, tgRepo, e.Logger, e.Vars[TGBotTokenVar])
 	otpSvc := services.NewOTPService(e.Redis, e.Logger)
 

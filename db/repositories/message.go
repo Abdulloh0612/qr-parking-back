@@ -19,20 +19,20 @@ func NewMessageRepo(pool *pgxpool.Pool) *MessageRepo {
 	return &MessageRepo{pool: pool}
 }
 
-const msgSelectCols = `id, qr_code_id, vehicle_id, content, sender_name, sender_phone, is_delivered, delivered_at, created_at`
+const msgSelectCols = `id, qr_code_id, vehicle_id, content, media_url, sender_name, sender_phone, is_delivered, delivered_at, created_at`
 
 func scanMessage(dest *types.Message, scan func(...any) error) error {
 	return scan(
 		&dest.ID, &dest.QRCodeID, &dest.VehicleID,
-		&dest.Content, &dest.SenderName, &dest.SenderPhone,
+		&dest.Content, &dest.MediaURL, &dest.SenderName, &dest.SenderPhone,
 		&dest.IsDelivered, &dest.DeliveredAt, &dest.CreatedAt,
 	)
 }
 
 func (r *MessageRepo) Create(ctx context.Context, msg *types.Message) error {
-	query := `INSERT INTO messages (id, qr_code_id, vehicle_id, content, sender_name, sender_phone)
-		VALUES ($1, $2, $3, $4, $5, $6)`
-	_, err := r.pool.Exec(ctx, query, msg.ID, msg.QRCodeID, msg.VehicleID, msg.Content, msg.SenderName, msg.SenderPhone)
+	query := `INSERT INTO messages (id, qr_code_id, vehicle_id, content, media_url, sender_name, sender_phone)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	_, err := r.pool.Exec(ctx, query, msg.ID, msg.QRCodeID, msg.VehicleID, msg.Content, msg.MediaURL, msg.SenderName, msg.SenderPhone)
 	return err
 }
 

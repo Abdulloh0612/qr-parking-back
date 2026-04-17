@@ -40,21 +40,22 @@ type OwnerProfileInput struct {
 
 // QROwnerOut is the public profile shown when anyone scans a registered QR.
 type QROwnerOut struct {
-	DisplayID       uuid.UUID `json:"id"`
-	Phone           string    `json:"phone"`
-	FirstName       string    `json:"first_name"`
-	LastName        string    `json:"last_name"`
-	AvatarURL       *string   `json:"avatar_url,omitempty"`
-	VehicleNumber   string    `json:"vehicle_number"`
-	VehicleBrand    string    `json:"vehicle_brand"`
-	VehiclePhotoURL *string   `json:"vehicle_photo_url,omitempty"`
-	WhatsApp        *string   `json:"whatsapp,omitempty"`
-	Instagram       *string   `json:"instagram,omitempty"`
-	Telegram        *string   `json:"telegram,omitempty"`
-	VK              *string   `json:"vk,omitempty"`
-	Facebook        *string   `json:"facebook,omitempty"`
-	TelegramEnabled bool      `json:"telegram_enabled"`
-	ScanCount       int       `json:"scan_count"`
+	DisplayID         uuid.UUID `json:"id"`
+	Phone             string    `json:"phone"`
+	FirstName         string    `json:"first_name"`
+	LastName          string    `json:"last_name"`
+	AvatarURL         *string   `json:"avatar_url,omitempty"`
+	VehicleNumber     string    `json:"vehicle_number"`
+	VehicleBrand      string    `json:"vehicle_brand"`
+	VehiclePhotoURL   *string   `json:"vehicle_photo_url,omitempty"`
+	WhatsApp          *string   `json:"whatsapp,omitempty"`
+	Instagram         *string   `json:"instagram,omitempty"`
+	Telegram          *string   `json:"telegram,omitempty"`
+	VK                *string   `json:"vk,omitempty"`
+	Facebook          *string   `json:"facebook,omitempty"`
+	TelegramEnabled   bool      `json:"telegram_enabled"`
+	TelegramBotLinked bool      `json:"telegram_bot_linked"`
+	ScanCount         int       `json:"scan_count"`
 }
 
 // QRInfoResult wraps the GetQRInfo response.
@@ -96,6 +97,7 @@ type APISpecService struct {
 	qrRepo      repositories.QRCodeRepository
 	socialRepo  repositories.SocialProfileRepository
 	scanRepo    repositories.ScanEventRepository
+	tgRepo      repositories.TelegramRepository
 }
 
 func NewAPISpecService(
@@ -104,6 +106,7 @@ func NewAPISpecService(
 	qrRepo repositories.QRCodeRepository,
 	socialRepo repositories.SocialProfileRepository,
 	scanRepo repositories.ScanEventRepository,
+	tgRepo repositories.TelegramRepository,
 ) *APISpecService {
 	return &APISpecService{
 		userRepo:    userRepo,
@@ -111,6 +114,7 @@ func NewAPISpecService(
 		qrRepo:      qrRepo,
 		socialRepo:  socialRepo,
 		scanRepo:    scanRepo,
+		tgRepo:      tgRepo,
 	}
 }
 
@@ -156,23 +160,25 @@ func (s *APISpecService) GetQRInfo(ctx context.Context, qrRef, ip, userAgent str
 
 	socials, _ := s.socialRepo.GetPublicByUserID(ctx, user.DisplayID)
 	scans, _ := s.scanRepo.CountByQRCodeID(ctx, qr.Code)
+	tgAcc, _ := s.tgRepo.GetByUserID(ctx, user.DisplayID)
 
 	owner := &QROwnerOut{
-		DisplayID:       user.DisplayID,
-		Phone:           user.Phone,
-		FirstName:       user.FirstName,
-		LastName:        user.LastName,
-		AvatarURL:       user.AvatarURL,
-		VehicleNumber:   veh.PlateNumber,
-		VehicleBrand:    veh.CarModel,
-		VehiclePhotoURL: veh.PhotoURL,
-		TelegramEnabled: veh.TelegramEnabled,
-		ScanCount:       scans,
-		WhatsApp:        pickSocial(socials, types.PlatformWhatsApp),
-		Instagram:       pickSocial(socials, types.PlatformInstagram),
-		Telegram:        pickSocial(socials, types.PlatformTelegram),
-		VK:              pickSocial(socials, types.PlatformVK),
-		Facebook:        pickSocial(socials, types.PlatformFacebook),
+		DisplayID:         user.DisplayID,
+		Phone:             user.Phone,
+		FirstName:         user.FirstName,
+		LastName:          user.LastName,
+		AvatarURL:         user.AvatarURL,
+		VehicleNumber:     veh.PlateNumber,
+		VehicleBrand:      veh.CarModel,
+		VehiclePhotoURL:   veh.PhotoURL,
+		TelegramEnabled:   veh.TelegramEnabled,
+		TelegramBotLinked: tgAcc != nil,
+		ScanCount:         scans,
+		WhatsApp:          pickSocial(socials, types.PlatformWhatsApp),
+		Instagram:         pickSocial(socials, types.PlatformInstagram),
+		Telegram:          pickSocial(socials, types.PlatformTelegram),
+		VK:                pickSocial(socials, types.PlatformVK),
+		Facebook:          pickSocial(socials, types.PlatformFacebook),
 	}
 	return &QRInfoResult{Registered: true, Owner: owner}, nil
 }
