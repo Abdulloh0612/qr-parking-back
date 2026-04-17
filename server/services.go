@@ -10,11 +10,12 @@ type Services struct {
 	Essentials
 
 	// Repositories accessed directly by handlers
-	AdminRepo repositories.AdminRepository
-	UserRepo  repositories.UserRepository
-	QRRepo    repositories.QRCodeRepository
-	ScanRepo  repositories.ScanEventRepository
-	MsgRepo   repositories.MessageRepository
+	AdminRepo   repositories.AdminRepository
+	UserRepo    repositories.UserRepository
+	VehicleRepo repositories.VehicleRepository
+	QRRepo      repositories.QRCodeRepository
+	ScanRepo    repositories.ScanEventRepository
+	MsgRepo     repositories.MessageRepository
 
 	// Application services
 	Auth    *services.AuthService
@@ -41,12 +42,13 @@ func NewServices(e Essentials) Services {
 	otpSvc := services.NewOTPService(e.Redis, e.Logger)
 
 	return Services{
-		Essentials: e,
-		AdminRepo:  adminRepo,
-		UserRepo:   userRepo,
-		QRRepo:     qrRepo,
-		ScanRepo:   scanRepo,
-		MsgRepo:    msgRepo,
+		Essentials:  e,
+		AdminRepo:   adminRepo,
+		UserRepo:    userRepo,
+		VehicleRepo: vehicleRepo,
+		QRRepo:      qrRepo,
+		ScanRepo:    scanRepo,
+		MsgRepo:     msgRepo,
 		Auth:       authSvc,
 		QR:         qrSvc,
 		APISpec:    apiSpecSvc,

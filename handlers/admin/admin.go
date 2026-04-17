@@ -7,6 +7,7 @@ import (
 	"qr-parking/db/repositories"
 	"qr-parking/middleware"
 	"qr-parking/services"
+	"qr-parking/types"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -16,21 +17,23 @@ import (
 )
 
 type AdminHandler struct {
-	adminRepo repositories.AdminRepository
-	qrSvc     *services.QRService
-	userRepo  repositories.UserRepository
-	qrRepo    repositories.QRCodeRepository
-	scanRepo  repositories.ScanEventRepository
-	msgRepo   repositories.MessageRepository
-	pool      *pgxpool.Pool
-	redis     *redis.Client
-	logger    *zap.Logger
+	adminRepo   repositories.AdminRepository
+	qrSvc       *services.QRService
+	userRepo    repositories.UserRepository
+	vehicleRepo repositories.VehicleRepository
+	qrRepo      repositories.QRCodeRepository
+	scanRepo    repositories.ScanEventRepository
+	msgRepo     repositories.MessageRepository
+	pool        *pgxpool.Pool
+	redis       *redis.Client
+	logger      *zap.Logger
 }
 
 func NewAdminHandler(
 	adminRepo repositories.AdminRepository,
 	qrSvc *services.QRService,
 	userRepo repositories.UserRepository,
+	vehicleRepo repositories.VehicleRepository,
 	qrRepo repositories.QRCodeRepository,
 	scanRepo repositories.ScanEventRepository,
 	msgRepo repositories.MessageRepository,
@@ -39,15 +42,16 @@ func NewAdminHandler(
 	logger *zap.Logger,
 ) *AdminHandler {
 	return &AdminHandler{
-		adminRepo: adminRepo,
-		qrSvc:     qrSvc,
-		userRepo:  userRepo,
-		qrRepo:    qrRepo,
-		scanRepo:  scanRepo,
-		msgRepo:   msgRepo,
-		pool:      pool,
-		redis:     redis,
-		logger:    logger,
+		adminRepo:   adminRepo,
+		qrSvc:       qrSvc,
+		userRepo:    userRepo,
+		vehicleRepo: vehicleRepo,
+		qrRepo:      qrRepo,
+		scanRepo:    scanRepo,
+		msgRepo:     msgRepo,
+		pool:        pool,
+		redis:       redis,
+		logger:      logger,
 	}
 }
 
@@ -375,6 +379,209 @@ func (h *AdminHandler) GetMonitoringMetrics(c *fiber.Ctx) error {
 			"db_pool_idle":     h.pool.Stat().IdleConns(),
 		},
 	})
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+type DashboardGrowthPoint struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
+type DashboardResponse struct {
+	TotalUsers    int                    `json:"total_users"`
+	TotalQRCodes  int                    `json:"total_qr_codes"`
+	ActiveQR      int                    `json:"active_qr"`
+	UnregisteredQR int                   `json:"unregistered_qr"`
+	BlockedQR     int                    `json:"blocked_qr"`
+	TotalMessages int                    `json:"total_messages"`
+	ScansToday    int                    `json:"scans_today"`
+	UserGrowth    []DashboardGrowthPoint `json:"user_growth"`
+}
+
+// GetDashboard godoc
+// @Summary Dashboard statistics with user growth chart
+// @Tags Admin
+// @Security BearerAuth
+// @Param days query int false "Days for growth chart" default(30)
+// @Success 200 {object} DashboardResponse
+// @Router /admin/dashboard [get]
+func (h *AdminHandler) GetDashboard(c *fiber.Ctx) error {
+	ctx := c.Context()
+
+	days, _ := strconv.Atoi(c.Query("days", "30"))
+	if days < 7 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+
+	qrCounts, _ := h.qrRepo.CountByStatus(ctx)
+	scansToday, _ := h.scanRepo.CountToday(ctx)
+	msgCount, _ := h.msgRepo.CountAll(ctx)
+	_, userTotal, _ := h.userRepo.List(ctx, 0, 1)
+
+	totalQR := 0
+	for _, v := range qrCounts {
+		totalQR += v
+	}
+
+	// User growth per day
+	rows, err := h.pool.Query(ctx,
+		`SELECT DATE(created_at)::text AS day, COUNT(*)::int
+		 FROM users
+		 WHERE created_at >= NOW() - ($1 || ' days')::interval
+		 GROUP BY day ORDER BY day`,
+		strconv.Itoa(days),
+	)
+	var growth []DashboardGrowthPoint
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var p DashboardGrowthPoint
+			_ = rows.Scan(&p.Date, &p.Count)
+			growth = append(growth, p)
+		}
+	}
+	if growth == nil {
+		growth = []DashboardGrowthPoint{}
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": DashboardResponse{
+			TotalUsers:     userTotal,
+			TotalQRCodes:   totalQR,
+			ActiveQR:       qrCounts["active"],
+			UnregisteredQR: qrCounts["unregistered"],
+			BlockedQR:      qrCounts["blocked"],
+			TotalMessages:  msgCount,
+			ScansToday:     scansToday,
+			UserGrowth:     growth,
+		},
+	})
+}
+
+// ─── User detail ─────────────────────────────────────────────────────────────
+
+type UserDetailResponse struct {
+	types.User
+	Vehicles     []types.Vehicle  `json:"vehicles"`
+	Messages     []types.Message  `json:"messages"`
+	QRCodes      []types.QRCode   `json:"qr_codes"`
+	VehicleCount int              `json:"vehicle_count"`
+}
+
+// GetUserDetail godoc
+// @Summary Get full user details with vehicles, messages, qr codes
+// @Tags Admin
+// @Security BearerAuth
+// @Param id path string true "User UUID"
+// @Success 200 {object} UserDetailResponse
+// @Router /admin/users/{id}/detail [get]
+func (h *AdminHandler) GetUserDetail(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid user id")
+	}
+	ctx := c.Context()
+
+	user, err := h.userRepo.GetByID(ctx, id)
+	if err != nil || user == nil {
+		return errorResponse(c, fiber.StatusNotFound, "user not found")
+	}
+
+	vehicles, _ := h.vehicleRepo.GetByUserID(ctx, id)
+	if vehicles == nil {
+		vehicles = []types.Vehicle{}
+	}
+
+	messages, _, _ := h.msgRepo.GetByUserID(ctx, id, 0, 50)
+	if messages == nil {
+		messages = []types.Message{}
+	}
+
+	qrCodes, _ := h.qrRepo.GetByUserID(ctx, id)
+	if qrCodes == nil {
+		qrCodes = []types.QRCode{}
+	}
+
+	return successResponse(c, UserDetailResponse{
+		User:         *user,
+		Vehicles:     vehicles,
+		Messages:     messages,
+		QRCodes:      qrCodes,
+		VehicleCount: len(vehicles),
+	})
+}
+
+// UpdateUser godoc
+// @Summary Update user data
+// @Tags Admin
+// @Security BearerAuth
+// @Param id path string true "User UUID"
+// @Param body body types.UserUpdate true "User update"
+// @Success 200 {object} DataResponse
+// @Router /admin/users/{id} [patch]
+func (h *AdminHandler) UpdateUser(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid user id")
+	}
+	var upd types.UserUpdate
+	if err := c.BodyParser(&upd); err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	user, err := h.userRepo.Update(c.Context(), id, upd)
+	if err != nil {
+		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	return successResponse(c, user)
+}
+
+// ListUserVehicles godoc
+// @Summary List vehicles for a user
+// @Tags Admin
+// @Security BearerAuth
+// @Param id path string true "User UUID"
+// @Success 200 {object} DataResponse
+// @Router /admin/users/{id}/vehicles [get]
+func (h *AdminHandler) ListUserVehicles(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid user id")
+	}
+	vehicles, err := h.vehicleRepo.GetByUserID(c.Context(), id)
+	if err != nil {
+		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	if vehicles == nil {
+		vehicles = []types.Vehicle{}
+	}
+	return successResponse(c, vehicles)
+}
+
+// ListUserQRCodes godoc
+// @Summary List QR codes for a user
+// @Tags Admin
+// @Security BearerAuth
+// @Param id path string true "User UUID"
+// @Success 200 {object} DataResponse
+// @Router /admin/users/{id}/qrcodes [get]
+func (h *AdminHandler) ListUserQRCodes(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid user id")
+	}
+	codes, err := h.qrRepo.GetByUserID(c.Context(), id)
+	if err != nil {
+		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	if codes == nil {
+		codes = []types.QRCode{}
+	}
+	return successResponse(c, codes)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

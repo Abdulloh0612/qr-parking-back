@@ -59,7 +59,7 @@ func New() (*Server, error) {
 	qrH := clienthandler.NewQRHandler(s.QR, s.APISpec, s.Message, s.JWTMgr, s.OTP)
 	meH := clienthandler.NewMeHandler(s.APISpec)
 	adminH := adminhandler.NewAdminHandler(
-		s.AdminRepo, s.QR, s.UserRepo, s.QRRepo, s.ScanRepo, s.MsgRepo,
+		s.AdminRepo, s.QR, s.UserRepo, s.VehicleRepo, s.QRRepo, s.ScanRepo, s.MsgRepo,
 		s.Pool, s.Redis, s.Logger,
 	)
 	authH := adminhandler.NewAuthHandler(s.Auth)
@@ -84,16 +84,22 @@ func New() (*Server, error) {
 	api.Post("/admin/login", authH.AdminLogin)
 
 	admin := api.Group("/admin", middleware.JWTAuth(s.JWTMgr), middleware.AdminOnly())
+	admin.Get("/dashboard", adminH.GetDashboard)
 	admin.Get("/admins", adminH.ListAdmins)
 	admin.Get("/admins/:id", adminH.GetAdmin)
 	admin.Patch("/admins/:id/block", adminH.BlockAdmin)
 	admin.Get("/users", adminH.ListUsers)
 	admin.Get("/users/:id", adminH.GetUser)
+	admin.Get("/users/:id/detail", adminH.GetUserDetail)
+	admin.Patch("/users/:id", adminH.UpdateUser)
 	admin.Patch("/users/:id/block", adminH.BlockUser)
+	admin.Get("/users/:id/vehicles", adminH.ListUserVehicles)
+	admin.Get("/users/:id/qrcodes", adminH.ListUserQRCodes)
+	admin.Get("/users/:id/messages", adminH.GetMessagesByUserID)
+	admin.Get("/qrcodes", adminH.ListQRCodes)
 	admin.Post("/qrcodes/generate", adminH.GenerateQRCodes)
 	admin.Patch("/qrcodes/:id/block", adminH.BlockQR)
 	admin.Get("/messages", adminH.ListMessages)
-	admin.Get("/messages/:user_id", adminH.GetMessagesByUserID)
 
 	return &Server{app: app, services: s}, nil
 }

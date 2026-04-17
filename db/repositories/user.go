@@ -158,7 +158,12 @@ func (r *UserRepo) List(ctx context.Context, offset, limit int) ([]types.User, i
 	}
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+userSelectCols+` FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		`SELECT u.`+userSelectCols+`, COALESCE(vc.cnt, 0)::int AS vehicle_count
+		 FROM users u
+		 LEFT JOIN (
+		   SELECT user_id, COUNT(*) AS cnt FROM vehicles GROUP BY user_id
+		 ) vc ON vc.user_id = u.display_id
+		 ORDER BY u.created_at DESC LIMIT $1 OFFSET $2`,
 		limit, offset,
 	)
 	if err != nil {
@@ -168,10 +173,28 @@ func (r *UserRepo) List(ctx context.Context, offset, limit int) ([]types.User, i
 
 	var users []types.User
 	for rows.Next() {
-		u, err := scanUser(rows)
-		if err != nil {
+		var deviceID sql.NullString
+		var avatarURL sql.NullString
+		var u types.User
+		var vehicleCount int
+		if err := rows.Scan(
+			&u.ID, &u.DisplayID,
+			&u.Phone, &u.FirstName, &u.LastName,
+			&u.IsAdmin, &deviceID, &avatarURL,
+			&u.CreatedAt, &u.UpdatedAt,
+			&vehicleCount,
+		); err != nil {
 			return nil, 0, err
 		}
+		if deviceID.Valid {
+			s := deviceID.String
+			u.DeviceID = &s
+		}
+		if avatarURL.Valid {
+			s := avatarURL.String
+			u.AvatarURL = &s
+		}
+		u.VehicleCount = vehicleCount
 		users = append(users, u)
 	}
 	return users, total, nil
