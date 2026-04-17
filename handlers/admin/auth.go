@@ -23,6 +23,7 @@ type AdminLoginRequest struct {
 type AdminLoginResponse struct {
 	Tokens       *TokensResponse `json:"tokens"`
 	AdminSession bool            `json:"admin_session" example:"true"`
+	Role         string          `json:"role" example:"super_admin"`
 }
 
 type TokensResponse struct {
@@ -51,10 +52,10 @@ func (h *AuthHandler) AdminLogin(c *fiber.Ctx) error {
 		return errorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 
-	tokens, err := h.authService.AdminLogin(c.Context(), req.Username, req.Password)
+	tokens, role, err := h.authService.AdminLogin(c.Context(), req.Username, req.Password)
 	if err != nil {
 		return errorResponse(c, fiber.StatusUnauthorized, err.Error())
 	}
 
-	return c.JSON(fiber.Map{"tokens": tokens, "admin_session": true})
+	return c.JSON(fiber.Map{"tokens": tokens, "admin_session": true, "role": role})
 }

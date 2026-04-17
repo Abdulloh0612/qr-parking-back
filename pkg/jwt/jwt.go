@@ -17,6 +17,7 @@ type Claims struct {
 	UserID       uuid.UUID `json:"user_id"`
 	IsAdmin      bool      `json:"is_admin"`
 	AdminSession bool      `json:"admin_session"` // true только при входе в админку логином/паролем
+	AdminRole    string    `json:"admin_role"`    // "admin" | "super_admin" для admin_session; иначе пусто
 	jwt.RegisteredClaims
 }
 
@@ -50,17 +51,17 @@ func NewManagerFromVars(secret, accessTTLStr, refreshTTLStr string) *Manager {
 
 // GenerateToken creates a single JWT valid for the given TTL.
 func (m *Manager) GenerateToken(userID uuid.UUID, isAdmin bool, adminSession bool, ttl time.Duration) (string, error) {
-	return m.generateToken(userID, isAdmin, adminSession, ttl)
+	return m.generateToken(userID, isAdmin, adminSession, "", ttl)
 }
 
 // GenerateTokenPair creates an access + refresh token pair (used for admin sessions).
-func (m *Manager) GenerateTokenPair(userID uuid.UUID, isAdmin bool, adminSession bool) (*TokenPair, error) {
-	accessToken, err := m.generateToken(userID, isAdmin, adminSession, m.accessTokenTTL)
+func (m *Manager) GenerateTokenPair(userID uuid.UUID, isAdmin bool, adminSession bool, adminRole string) (*TokenPair, error) {
+	accessToken, err := m.generateToken(userID, isAdmin, adminSession, adminRole, m.accessTokenTTL)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}
 
-	refreshToken, err := m.generateToken(userID, isAdmin, adminSession, m.refreshTokenTTL)
+	refreshToken, err := m.generateToken(userID, isAdmin, adminSession, adminRole, m.refreshTokenTTL)
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
@@ -71,11 +72,12 @@ func (m *Manager) GenerateTokenPair(userID uuid.UUID, isAdmin bool, adminSession
 	}, nil
 }
 
-func (m *Manager) generateToken(userID uuid.UUID, isAdmin bool, adminSession bool, ttl time.Duration) (string, error) {
+func (m *Manager) generateToken(userID uuid.UUID, isAdmin bool, adminSession bool, adminRole string, ttl time.Duration) (string, error) {
 	claims := &Claims{
 		UserID:       userID,
 		IsAdmin:      isAdmin,
 		AdminSession: adminSession,
+		AdminRole:    adminRole,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

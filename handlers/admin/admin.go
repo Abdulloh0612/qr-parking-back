@@ -1,19 +1,23 @@
 package admin
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
 	"qr-parking/db/repositories"
 	"qr-parking/middleware"
+	"qr-parking/pkg/validator"
 	"qr-parking/services"
 	"qr-parking/types"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AdminHandler struct {
@@ -57,6 +61,32 @@ func NewAdminHandler(
 
 // ─── Admin management ─────────────────────────────────────────────────────────
 
+// GetAdminMe godoc
+// @Summary Current admin session (username, role)
+// @Tags Admin
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/me [get]
+func (h *AdminHandler) GetAdminMe(c *fiber.Ctx) error {
+	id := middleware.GetUserID(c)
+	a, err := h.adminRepo.GetByDisplayID(c.Context(), id)
+	if err != nil || a == nil {
+		return errorResponse(c, fiber.StatusNotFound, "admin not found")
+	}
+	role := a.Role
+	if role == "" {
+		role = "admin"
+	}
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": fiber.Map{
+			"username":   a.Username,
+			"role":       role,
+			"display_id": a.DisplayID.String(),
+		},
+	})
+}
+
 // ListAdmins godoc
 // @Summary List all admins (paginated)
 // @Tags Admin
@@ -93,6 +123,110 @@ func (h *AdminHandler) GetAdmin(c *fiber.Ctx) error {
 	return successResponse(c, admin)
 }
 
+type createAdminRequest struct {
+	Username string `json:"username" validate:"required,min=2,max=64"`
+	Password string `json:"password" validate:"required,min=8"`
+	Role     string `json:"role" validate:"omitempty,oneof=admin super_admin"`
+}
+
+// CreateAdmin godoc
+// @Summary Create admin user (super_admin only)
+// @Tags Admin
+// @Security BearerAuth
+// @Router /admin/admins [post]
+func (h *AdminHandler) CreateAdmin(c *fiber.Ctx) error {
+	var req createAdminRequest
+	if err := c.BodyParser(&req); err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := validator.ValidateStruct(req); err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, err.Error())
+	}
+	role := req.Role
+	if role == "" {
+		role = "admin"
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return errorResponse(c, fiber.StatusInternalServerError, "hash password failed")
+	}
+	a, err := h.adminRepo.Create(c.Context(), req.Username, string(hash), role)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return errorResponse(c, fiber.StatusConflict, "username already taken")
+		}
+		h.logger.Sugar().Errorw("create admin", "err", err)
+		return errorResponse(c, fiber.StatusInternalServerError, "create admin failed")
+	}
+	return successResponse(c, a)
+}
+
+type patchAdminBody struct {
+	Password *string `json:"password"`
+	Role     *string `json:"role"`
+}
+
+// PatchAdmin godoc
+// @Summary Update admin password and/or role (super_admin only)
+// @Tags Admin
+// @Security BearerAuth
+// @Router /admin/admins/{id} [patch]
+func (h *AdminHandler) PatchAdmin(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid admin id")
+	}
+	var body patchAdminBody
+	if err := c.BodyParser(&body); err != nil {
+		return errorResponse(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	if body.Password == nil && body.Role == nil {
+		return errorResponse(c, fiber.StatusBadRequest, "nothing to update")
+	}
+	ctx := c.Context()
+	target, err := h.adminRepo.GetByDisplayID(ctx, id)
+	if err != nil || target == nil {
+		return errorResponse(c, fiber.StatusNotFound, "admin not found")
+	}
+	if body.Role != nil {
+		r := *body.Role
+		if r != "admin" && r != "super_admin" {
+			return errorResponse(c, fiber.StatusBadRequest, "invalid role")
+		}
+		if target.Role == "super_admin" && r == "admin" {
+			n, err := h.adminRepo.CountByRole(ctx, "super_admin")
+			if err != nil {
+				return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+			}
+			if n <= 1 {
+				return errorResponse(c, fiber.StatusBadRequest, "cannot demote last super admin")
+			}
+		}
+	}
+	var hash *string
+	if body.Password != nil && *body.Password != "" {
+		if len(*body.Password) < 8 {
+			return errorResponse(c, fiber.StatusBadRequest, "password min 8 characters")
+		}
+		b, err := bcrypt.GenerateFromPassword([]byte(*body.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return errorResponse(c, fiber.StatusInternalServerError, "hash password failed")
+		}
+		hs := string(b)
+		hash = &hs
+	}
+	var rolePtr *string
+	if body.Role != nil {
+		rolePtr = body.Role
+	}
+	updated, err := h.adminRepo.UpdateByDisplayID(ctx, id, hash, rolePtr)
+	if err != nil || updated == nil {
+		return errorResponse(c, fiber.StatusInternalServerError, "update failed")
+	}
+	return successResponse(c, updated)
+}
+
 // BlockAdmin godoc
 // @Summary Remove an admin account
 // @Tags Admin
@@ -109,7 +243,21 @@ func (h *AdminHandler) BlockAdmin(c *fiber.Ctx) error {
 	if callerID == id {
 		return errorResponse(c, fiber.StatusBadRequest, "cannot remove yourself")
 	}
-	if err := h.adminRepo.Block(c.Context(), id); err != nil {
+	ctx := c.Context()
+	target, err := h.adminRepo.GetByDisplayID(ctx, id)
+	if err != nil || target == nil {
+		return errorResponse(c, fiber.StatusNotFound, "admin not found")
+	}
+	if target.Role == "super_admin" {
+		n, err := h.adminRepo.CountByRole(ctx, "super_admin")
+		if err != nil {
+			return errorResponse(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if n <= 1 {
+			return errorResponse(c, fiber.StatusBadRequest, "cannot remove last super admin")
+		}
+	}
+	if err := h.adminRepo.Block(ctx, id); err != nil {
 		return errorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(MessageResponse{Message: "admin removed"})
@@ -459,6 +607,115 @@ func (h *AdminHandler) GetDashboard(c *fiber.Ctx) error {
 			TotalMessages:  msgCount,
 			ScansToday:     scansToday,
 			UserGrowth:     growth,
+		},
+	})
+}
+
+// DashboardChartPoint is one day in an admin chart series.
+type DashboardChartPoint struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
+// DashboardChartResponse is returned by GET /admin/dashboard/chart.
+type DashboardChartResponse struct {
+	Series string                 `json:"series"`
+	Days   int                    `json:"days"`
+	Points []DashboardChartPoint `json:"points"`
+}
+
+// GetDashboardChart godoc
+// @Summary Time series for dashboard chart (clients / QR created / QR activated per day)
+// @Description series: clients — new users per day; qr_created — qr_codes.created_at; qr_activated — qr_codes.registered_at (active claim).
+// @Tags Admin
+// @Security BearerAuth
+// @Param days query int false "Window length in days" default(30)
+// @Param series query string false "clients | qr_created | qr_activated" default(clients)
+// @Success 200 {object} DashboardChartResponse
+// @Router /admin/dashboard/chart [get]
+func (h *AdminHandler) GetDashboardChart(c *fiber.Ctx) error {
+	ctx := c.Context()
+
+	days, _ := strconv.Atoi(c.Query("days", "30"))
+	if days < 7 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+	series := c.Query("series", "clients")
+
+	var q string
+	switch series {
+	case "clients":
+		q = `
+WITH b AS (SELECT (CURRENT_DATE - ($1::int - 1))::date AS start_d, CURRENT_DATE::date AS end_d),
+day_list AS (SELECT generate_series(b.start_d, b.end_d, '1 day'::interval)::date AS d FROM b),
+agg AS (
+  SELECT (created_at::date) AS d, COUNT(*)::bigint AS cnt
+  FROM users
+  WHERE created_at::date >= (SELECT start_d FROM b)
+    AND created_at::date <= (SELECT end_d FROM b)
+  GROUP BY 1
+)
+SELECT day_list.d::text, COALESCE(agg.cnt, 0)::int FROM day_list
+LEFT JOIN agg ON agg.d = day_list.d ORDER BY day_list.d`
+	case "qr_created":
+		q = `
+WITH b AS (SELECT (CURRENT_DATE - ($1::int - 1))::date AS start_d, CURRENT_DATE::date AS end_d),
+day_list AS (SELECT generate_series(b.start_d, b.end_d, '1 day'::interval)::date AS d FROM b),
+agg AS (
+  SELECT (created_at::date) AS d, COUNT(*)::bigint AS cnt
+  FROM qr_codes
+  WHERE created_at::date >= (SELECT start_d FROM b)
+    AND created_at::date <= (SELECT end_d FROM b)
+  GROUP BY 1
+)
+SELECT day_list.d::text, COALESCE(agg.cnt, 0)::int FROM day_list
+LEFT JOIN agg ON agg.d = day_list.d ORDER BY day_list.d`
+	case "qr_activated":
+		q = `
+WITH b AS (SELECT (CURRENT_DATE - ($1::int - 1))::date AS start_d, CURRENT_DATE::date AS end_d),
+day_list AS (SELECT generate_series(b.start_d, b.end_d, '1 day'::interval)::date AS d FROM b),
+agg AS (
+  SELECT (registered_at::date) AS d, COUNT(*)::bigint AS cnt
+  FROM qr_codes
+  WHERE registered_at IS NOT NULL
+    AND registered_at::date >= (SELECT start_d FROM b)
+    AND registered_at::date <= (SELECT end_d FROM b)
+  GROUP BY 1
+)
+SELECT day_list.d::text, COALESCE(agg.cnt, 0)::int FROM day_list
+LEFT JOIN agg ON agg.d = day_list.d ORDER BY day_list.d`
+	default:
+		return errorResponse(c, fiber.StatusBadRequest, "series must be clients, qr_created or qr_activated")
+	}
+
+	rows, err := h.pool.Query(ctx, q, days)
+	if err != nil {
+		h.logger.Sugar().Errorw("dashboard chart query", "err", err, "series", series)
+		return errorResponse(c, fiber.StatusInternalServerError, "chart query failed")
+	}
+	defer rows.Close()
+
+	var points []DashboardChartPoint
+	for rows.Next() {
+		var p DashboardChartPoint
+		if err := rows.Scan(&p.Date, &p.Count); err != nil {
+			return errorResponse(c, fiber.StatusInternalServerError, "chart scan failed")
+		}
+		points = append(points, p)
+	}
+	if points == nil {
+		points = []DashboardChartPoint{}
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": DashboardChartResponse{
+			Series: series,
+			Days:   days,
+			Points: points,
 		},
 	})
 }

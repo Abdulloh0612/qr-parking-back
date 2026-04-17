@@ -17,8 +17,57 @@ definitions:
       admin_session:
         example: true
         type: boolean
+      role:
+        example: super_admin
+        type: string
       tokens:
         $ref: '#/definitions/admin.TokensResponse'
+    type: object
+  admin.DashboardChartPoint:
+    properties:
+      count:
+        type: integer
+      date:
+        type: string
+    type: object
+  admin.DashboardChartResponse:
+    properties:
+      days:
+        type: integer
+      points:
+        items:
+          $ref: '#/definitions/admin.DashboardChartPoint'
+        type: array
+      series:
+        type: string
+    type: object
+  admin.DashboardGrowthPoint:
+    properties:
+      count:
+        type: integer
+      date:
+        type: string
+    type: object
+  admin.DashboardResponse:
+    properties:
+      active_qr:
+        type: integer
+      blocked_qr:
+        type: integer
+      scans_today:
+        type: integer
+      total_messages:
+        type: integer
+      total_qr_codes:
+        type: integer
+      total_users:
+        type: integer
+      unregistered_qr:
+        type: integer
+      user_growth:
+        items:
+          $ref: '#/definitions/admin.DashboardGrowthPoint'
+        type: array
     type: object
   admin.DataResponse:
     properties:
@@ -84,8 +133,47 @@ definitions:
         example: eyJhbGciOiJIUzI1NiIs...
         type: string
     type: object
+  admin.UserDetailResponse:
+    properties:
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      device_id:
+        type: string
+      display_id:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: integer
+      is_admin:
+        type: boolean
+      last_name:
+        type: string
+      messages:
+        items:
+          $ref: '#/definitions/types.Message'
+        type: array
+      phone:
+        type: string
+      qr_codes:
+        items:
+          $ref: '#/definitions/types.QRCode'
+        type: array
+      updated_at:
+        type: string
+      vehicle_count:
+        type: integer
+      vehicles:
+        items:
+          $ref: '#/definitions/types.Vehicle'
+        type: array
+    type: object
   client.messageBody:
     properties:
+      media_url:
+        type: string
       message:
         type: string
     type: object
@@ -132,6 +220,96 @@ definitions:
       phone:
         type: string
     type: object
+  types.Message:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      delivered_at:
+        type: string
+      id:
+        type: string
+      is_delivered:
+        type: boolean
+      media_url:
+        type: string
+      qr_code_id:
+        description: = qr_codes.code (nullable after QR deletion)
+        type: string
+      sender_name:
+        type: string
+      sender_phone:
+        type: string
+      vehicle_id:
+        type: string
+    type: object
+  types.QRCode:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: integer
+      registered_at:
+        type: string
+      status:
+        $ref: '#/definitions/types.QRStatus'
+      vehicle_id:
+        type: string
+    type: object
+  types.QRStatus:
+    enum:
+    - unregistered
+    - active
+    - blocked
+    type: string
+    x-enum-varnames:
+    - QRStatusUnregistered
+    - QRStatusActive
+    - QRStatusBlocked
+  types.UserUpdate:
+    properties:
+      avatar_url:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+    type: object
+  types.Vehicle:
+    properties:
+      car_model:
+        type: string
+      created_at:
+        type: string
+      display_id:
+        description: UUID for external/API use
+        type: string
+      id:
+        description: BIGINT internal PK (admin display)
+        type: integer
+      is_public:
+        type: boolean
+      photo_url:
+        type: string
+      plate_number:
+        type: string
+      reviews_enabled:
+        type: boolean
+      telegram_enabled:
+        type: boolean
+      updated_at:
+        type: string
+      user_id:
+        description: FK → users.display_id
+        type: string
+    type: object
 host: qr-parking-back.abdullokh.com
 info:
   contact: {}
@@ -162,6 +340,13 @@ paths:
       summary: List all admins (paginated)
       tags:
       - Admin
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Create admin user (super_admin only)
+      tags:
+      - Admin
   /admin/admins/{id}:
     get:
       parameters:
@@ -180,6 +365,13 @@ paths:
       summary: Get admin by UUID
       tags:
       - Admin
+    patch:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Update admin password and/or role (super_admin only)
+      tags:
+      - Admin
   /admin/admins/{id}/block:
     patch:
       parameters:
@@ -196,6 +388,50 @@ paths:
       security:
       - BearerAuth: []
       summary: Remove an admin account
+      tags:
+      - Admin
+  /admin/dashboard:
+    get:
+      parameters:
+      - default: 30
+        description: Days for growth chart
+        in: query
+        name: days
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.DashboardResponse'
+      security:
+      - BearerAuth: []
+      summary: Dashboard statistics with user growth chart
+      tags:
+      - Admin
+  /admin/dashboard/chart:
+    get:
+      description: 'series: clients — new users per day; qr_created — qr_codes.created_at;
+        qr_activated — qr_codes.registered_at (active claim).'
+      parameters:
+      - default: 30
+        description: Window length in days
+        in: query
+        name: days
+        type: integer
+      - default: clients
+        description: clients | qr_created | qr_activated
+        in: query
+        name: series
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.DashboardChartResponse'
+      security:
+      - BearerAuth: []
+      summary: Time series for dashboard chart (clients / QR created / QR activated
+        per day)
       tags:
       - Admin
   /admin/login:
@@ -233,6 +469,19 @@ paths:
       summary: Admin login
       tags:
       - Auth
+  /admin/me:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Current admin session (username, role)
+      tags:
+      - Admin
   /admin/messages:
     get:
       parameters:
@@ -427,6 +676,29 @@ paths:
       summary: Get user by UUID
       tags:
       - Admin
+    patch:
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/types.UserUpdate'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.DataResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user data
+      tags:
+      - Admin
   /admin/users/{id}/block:
     patch:
       parameters:
@@ -443,6 +715,60 @@ paths:
       security:
       - BearerAuth: []
       summary: Block (delete) a user
+      tags:
+      - Admin
+  /admin/users/{id}/detail:
+    get:
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.UserDetailResponse'
+      security:
+      - BearerAuth: []
+      summary: Get full user details with vehicles, messages, qr codes
+      tags:
+      - Admin
+  /admin/users/{id}/qrcodes:
+    get:
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.DataResponse'
+      security:
+      - BearerAuth: []
+      summary: List QR codes for a user
+      tags:
+      - Admin
+  /admin/users/{id}/vehicles:
+    get:
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/admin.DataResponse'
+      security:
+      - BearerAuth: []
+      summary: List vehicles for a user
       tags:
       - Admin
   /me:
@@ -583,7 +909,7 @@ paths:
         name: qr_id
         required: true
         type: string
-      - description: Message text (1–500 chars)
+      - description: Message text (1–500 chars) and optional media_url
         in: body
         name: body
         required: true
@@ -740,6 +1066,34 @@ paths:
       summary: Get QR code as PNG image
       tags:
       - QR
+  /upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a media file (image or video) to attach to a message. Max
+        20MB.
+      parameters:
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Upload a photo or video
+      tags:
+      - Upload
 securityDefinitions:
   BearerAuth:
     description: Enter "Bearer {token}"

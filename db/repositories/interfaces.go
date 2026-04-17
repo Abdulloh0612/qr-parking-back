@@ -11,7 +11,9 @@ import (
 type AdminRepository interface {
 	GetByUsername(ctx context.Context, username string) (*types.Admin, error)
 	GetByDisplayID(ctx context.Context, displayID uuid.UUID) (*types.Admin, error)
-	Create(ctx context.Context, username, passwordHash string) (*types.Admin, error)
+	Create(ctx context.Context, username, passwordHash, role string) (*types.Admin, error)
+	UpdateByDisplayID(ctx context.Context, displayID uuid.UUID, passwordHash *string, role *string) (*types.Admin, error)
+	CountByRole(ctx context.Context, role string) (int, error)
 	List(ctx context.Context, offset, limit int) ([]types.Admin, int, error)
 	Block(ctx context.Context, displayID uuid.UUID) error
 }

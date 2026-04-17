@@ -39,6 +39,7 @@ func JWTAuth(jwtManager *jwtpkg.Manager) fiber.Handler {
 		c.Locals("userID", claims.UserID)
 		c.Locals("isAdmin", claims.IsAdmin)
 		c.Locals("adminSession", claims.AdminSession)
+		c.Locals("adminRole", claims.AdminRole)
 		return c.Next()
 	}
 }
@@ -61,4 +62,15 @@ func AdminOnly() fiber.Handler {
 func GetUserID(c *fiber.Ctx) uuid.UUID {
 	userID, _ := c.Locals("userID").(uuid.UUID)
 	return userID
+}
+
+// SuperAdminOnly allows only JWT with admin_role=super_admin (password admin login).
+func SuperAdminOnly() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		role, _ := c.Locals("adminRole").(string)
+		if role != "super_admin" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "super admin only"})
+		}
+		return c.Next()
+	}
 }

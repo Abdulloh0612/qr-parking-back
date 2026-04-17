@@ -50,6 +50,18 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Create admin user (super_admin only)",
+                "responses": {}
             }
         },
         "/admin/admins/{id}": {
@@ -80,6 +92,18 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Update admin password and/or role (super_admin only)",
+                "responses": {}
             }
         },
         "/admin/admins/{id}/block": {
@@ -107,6 +131,74 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/admin.MessageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dashboard": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Dashboard statistics with user growth chart",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 30,
+                        "description": "Days for growth chart",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.DashboardResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dashboard/chart": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "series: clients — new users per day; qr_created — qr_codes.created_at; qr_activated — qr_codes.registered_at (active claim).",
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Time series for dashboard chart (clients / QR created / QR activated per day)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 30,
+                        "description": "Window length in days",
+                        "name": "days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "clients",
+                        "description": "clients | qr_created | qr_activated",
+                        "name": "series",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.DashboardChartResponse"
                         }
                     }
                 }
@@ -159,6 +251,28 @@ const docTemplate = `{
                         "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/admin.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Current admin session (username, role)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -480,6 +594,43 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Update user data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.UserUpdate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.DataResponse"
+                        }
+                    }
+                }
             }
         },
         "/admin/users/{id}/block": {
@@ -507,6 +658,96 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/admin.MessageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/detail": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Get full user details with vehicles, messages, qr codes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.UserDetailResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/qrcodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List QR codes for a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.DataResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/vehicles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List vehicles for a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/admin.DataResponse"
                         }
                     }
                 }
@@ -720,7 +961,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Message text (1–500 chars)",
+                        "description": "Message text (1–500 chars) and optional media_url",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -935,6 +1176,46 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/upload": {
+            "post": {
+                "description": "Upload a media file (image or video) to attach to a message. Max 20MB.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Upload"
+                ],
+                "summary": "Upload a photo or video",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "File to upload",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -962,8 +1243,83 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": true
                 },
+                "role": {
+                    "type": "string",
+                    "example": "super_admin"
+                },
                 "tokens": {
                     "$ref": "#/definitions/admin.TokensResponse"
+                }
+            }
+        },
+        "admin.DashboardChartPoint": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.DashboardChartResponse": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer"
+                },
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.DashboardChartPoint"
+                    }
+                },
+                "series": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.DashboardGrowthPoint": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.DashboardResponse": {
+            "type": "object",
+            "properties": {
+                "active_qr": {
+                    "type": "integer"
+                },
+                "blocked_qr": {
+                    "type": "integer"
+                },
+                "scans_today": {
+                    "type": "integer"
+                },
+                "total_messages": {
+                    "type": "integer"
+                },
+                "total_qr_codes": {
+                    "type": "integer"
+                },
+                "total_users": {
+                    "type": "integer"
+                },
+                "unregistered_qr": {
+                    "type": "integer"
+                },
+                "user_growth": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.DashboardGrowthPoint"
+                    }
                 }
             }
         },
@@ -1061,9 +1417,68 @@ const docTemplate = `{
                 }
             }
         },
+        "admin.UserDetailResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "display_id": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_admin": {
+                    "type": "boolean"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.Message"
+                    }
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "qr_codes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.QRCode"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vehicle_count": {
+                    "type": "integer"
+                },
+                "vehicles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.Vehicle"
+                    }
+                }
+            }
+        },
         "client.messageBody": {
             "type": "object",
             "properties": {
+                "media_url": {
+                    "type": "string"
+                },
                 "message": {
                     "type": "string"
                 }
@@ -1131,6 +1546,139 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.Message": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "delivered_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_delivered": {
+                    "type": "boolean"
+                },
+                "media_url": {
+                    "type": "string"
+                },
+                "qr_code_id": {
+                    "description": "= qr_codes.code (nullable after QR deletion)",
+                    "type": "string"
+                },
+                "sender_name": {
+                    "type": "string"
+                },
+                "sender_phone": {
+                    "type": "string"
+                },
+                "vehicle_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.QRCode": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "registered_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.QRStatus"
+                },
+                "vehicle_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.QRStatus": {
+            "type": "string",
+            "enum": [
+                "unregistered",
+                "active",
+                "blocked"
+            ],
+            "x-enum-varnames": [
+                "QRStatusUnregistered",
+                "QRStatusActive",
+                "QRStatusBlocked"
+            ]
+        },
+        "types.UserUpdate": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.Vehicle": {
+            "type": "object",
+            "properties": {
+                "car_model": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "display_id": {
+                    "description": "UUID for external/API use",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "BIGINT internal PK (admin display)",
+                    "type": "integer"
+                },
+                "is_public": {
+                    "type": "boolean"
+                },
+                "photo_url": {
+                    "type": "string"
+                },
+                "plate_number": {
+                    "type": "string"
+                },
+                "reviews_enabled": {
+                    "type": "boolean"
+                },
+                "telegram_enabled": {
+                    "type": "boolean"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "FK → users.display_id",
                     "type": "string"
                 }
             }

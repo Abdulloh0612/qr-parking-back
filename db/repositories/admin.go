@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"qr-parking/types"
 
@@ -20,10 +21,10 @@ func NewAdminRepo(pool *pgxpool.Pool) *AdminRepo {
 	return &AdminRepo{pool: pool}
 }
 
-const adminSelectCols = `id, display_id, username, password_hash, created_at, updated_at`
+const adminSelectCols = `id, display_id, username, role, password_hash, created_at, updated_at`
 
 func scanAdmin(dest *types.Admin, scan func(...any) error) error {
-	return scan(&dest.ID, &dest.DisplayID, &dest.Username, &dest.PasswordHash, &dest.CreatedAt, &dest.UpdatedAt)
+	return scan(&dest.ID, &dest.DisplayID, &dest.Username, &dest.Role, &dest.PasswordHash, &dest.CreatedAt, &dest.UpdatedAt)
 }
 
 func (r *AdminRepo) GetByUsername(ctx context.Context, username string) (*types.Admin, error) {
@@ -56,18 +57,54 @@ func (r *AdminRepo) GetByDisplayID(ctx context.Context, displayID uuid.UUID) (*t
 	return &a, nil
 }
 
-func (r *AdminRepo) Create(ctx context.Context, username, passwordHash string) (*types.Admin, error) {
+func (r *AdminRepo) Create(ctx context.Context, username, passwordHash, role string) (*types.Admin, error) {
 	var a types.Admin
 	err := scanAdmin(&a, r.pool.QueryRow(ctx,
-		`INSERT INTO admins (username, password_hash)
-		 VALUES ($1, $2)
+		`INSERT INTO admins (username, password_hash, role)
+		 VALUES ($1, $2, $3)
 		 RETURNING `+adminSelectCols,
-		username, passwordHash,
+		username, passwordHash, role,
 	).Scan)
 	if err != nil {
 		return nil, err
 	}
 	return &a, nil
+}
+
+func (r *AdminRepo) UpdateByDisplayID(ctx context.Context, displayID uuid.UUID, passwordHash *string, role *string) (*types.Admin, error) {
+	if passwordHash == nil && role == nil {
+		return r.GetByDisplayID(ctx, displayID)
+	}
+	args := []interface{}{displayID}
+	var sets []string
+	idx := 2
+	if passwordHash != nil {
+		sets = append(sets, fmt.Sprintf("password_hash = $%d", idx))
+		args = append(args, *passwordHash)
+		idx++
+	}
+	if role != nil {
+		sets = append(sets, fmt.Sprintf("role = $%d", idx))
+		args = append(args, *role)
+		idx++
+	}
+	sets = append(sets, "updated_at = NOW()")
+	q := `UPDATE admins SET ` + strings.Join(sets, ", ") + ` WHERE display_id = $1 RETURNING ` + adminSelectCols
+	var a types.Admin
+	err := scanAdmin(&a, r.pool.QueryRow(ctx, q, args...).Scan)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (r *AdminRepo) CountByRole(ctx context.Context, role string) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM admins WHERE role = $1`, role).Scan(&n)
+	return n, err
 }
 
 func (r *AdminRepo) List(ctx context.Context, offset, limit int) ([]types.Admin, int, error) {
