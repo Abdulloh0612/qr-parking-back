@@ -15,6 +15,18 @@ ALTER TABLE messages RENAME COLUMN qr_code_uuid TO qr_code_id;
 ALTER TABLE messages ADD CONSTRAINT messages_qr_code_id_fkey
     FOREIGN KEY (qr_code_id) REFERENCES qr_codes(display_id);
 
+-- ratings: revert qr_code_id back to UUID referencing qr_codes.display_id
+ALTER TABLE ratings DROP CONSTRAINT IF EXISTS ratings_qr_code_id_fkey;
+ALTER TABLE ratings ADD COLUMN qr_code_uuid UUID;
+UPDATE ratings r
+    SET qr_code_uuid = q.display_id
+    FROM qr_codes q
+    WHERE q.code = r.qr_code_id;
+ALTER TABLE ratings DROP COLUMN qr_code_id;
+ALTER TABLE ratings RENAME COLUMN qr_code_uuid TO qr_code_id;
+ALTER TABLE ratings ADD CONSTRAINT ratings_qr_code_id_fkey
+    FOREIGN KEY (qr_code_id) REFERENCES qr_codes(display_id) ON DELETE SET NULL;
+
 -- scan_events: revert qr_code_id back to UUID referencing qr_codes.display_id
 ALTER TABLE scan_events DROP CONSTRAINT IF EXISTS scan_events_qr_code_id_fkey;
 ALTER TABLE scan_events DROP INDEX IF EXISTS idx_scan_qr_code;

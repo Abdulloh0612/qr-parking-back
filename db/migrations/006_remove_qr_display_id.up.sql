@@ -25,6 +25,18 @@ ALTER TABLE messages RENAME COLUMN qr_code_code TO qr_code_id;
 ALTER TABLE messages ADD CONSTRAINT messages_qr_code_id_fkey
     FOREIGN KEY (qr_code_id) REFERENCES qr_codes(code) ON DELETE SET NULL;
 
+-- ── ratings: change qr_code_id from UUID (→qr_codes.display_id) to VARCHAR (→qr_codes.code) ──
+ALTER TABLE ratings DROP CONSTRAINT IF EXISTS ratings_qr_code_id_fkey;
+ALTER TABLE ratings ADD COLUMN qr_code_code VARCHAR(32);
+UPDATE ratings r
+    SET qr_code_code = q.code
+    FROM qr_codes q
+    WHERE q.display_id = r.qr_code_id;
+ALTER TABLE ratings DROP COLUMN qr_code_id;
+ALTER TABLE ratings RENAME COLUMN qr_code_code TO qr_code_id;
+ALTER TABLE ratings ADD CONSTRAINT ratings_qr_code_id_fkey
+    FOREIGN KEY (qr_code_id) REFERENCES qr_codes(code) ON DELETE SET NULL;
+
 -- ── qr_codes: drop display_id ──────────────────────────────────────────────────
 ALTER TABLE qr_codes DROP CONSTRAINT IF EXISTS qr_codes_display_id_key;
 ALTER TABLE qr_codes DROP COLUMN IF EXISTS display_id;
