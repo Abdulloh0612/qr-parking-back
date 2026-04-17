@@ -756,7 +756,7 @@ const docTemplate = `{
         },
         "/qr-verify/{qr_id}": {
             "post": {
-                "description": "Verifies the OTP, creates or links the user by phone,\nthen returns an access token valid for 30 days.",
+                "description": "Verifies the OTP, creates or links the user by phone,\nthen returns an access token valid for 30 days.\nIf the QR is already registered: owner phone → owner token; else if phone exists in DB → that account's token.",
                 "consumes": [
                     "application/json"
                 ],

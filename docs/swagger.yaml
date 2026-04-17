@@ -617,6 +617,7 @@ paths:
       description: |-
         Verifies the OTP, creates or links the user by phone,
         then returns an access token valid for 30 days.
+        If the QR is already registered: owner phone → owner token; else if phone exists in DB → that account's token.
       parameters:
       - description: QR code
         in: path

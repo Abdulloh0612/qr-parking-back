@@ -107,6 +107,7 @@ const ownerTokenTTL = 30 * 24 * time.Hour // 30 days
 // @Summary Verify OTP and register the QR code
 // @Description Verifies the OTP, creates or links the user by phone,
 // @Description then returns an access token valid for 30 days.
+// @Description If the QR is already registered: owner phone → owner token; else if phone exists in DB → that account's token.
 // @Tags QR
 // @Accept json
 // @Produce json

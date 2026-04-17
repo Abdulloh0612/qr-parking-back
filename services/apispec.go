@@ -179,10 +179,50 @@ func (s *APISpecService) GetQRInfo(ctx context.Context, qrRef, ip, userAgent str
 
 // ─── QR registration ─────────────────────────────────────────────────────────
 
+// loginExistingQROwner handles VerifyQR when QR is already registered (active).
+// 1) Phone matches QR owner → token for owner.
+// 2) Phone differs but exists in DB → token for that account (same user as phone).
+// 3) Otherwise → validation error (unknown OTP phone for this QR).
+func (s *APISpecService) loginExistingQROwner(ctx context.Context, qr *types.QRCode, phone string) (uuid.UUID, bool, error) {
+	if qr.VehicleID == nil {
+		return uuid.Nil, false, errValidation("QR код уже зарегистрирован", map[string]string{"qr_id": "Уже зарегистрирован"})
+	}
+	veh, err := s.vehicleRepo.GetByID(ctx, *qr.VehicleID)
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("lookup vehicle: %w", err)
+	}
+	if veh == nil {
+		return uuid.Nil, false, errNotFound("QR код не найден")
+	}
+	owner, err := s.userRepo.GetByID(ctx, veh.UserID)
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("lookup user: %w", err)
+	}
+	if owner == nil {
+		return uuid.Nil, false, errNotFound("Пользователь не найден")
+	}
+	p := strings.TrimSpace(phone)
+	if strings.TrimSpace(owner.Phone) == p {
+		return owner.DisplayID, false, nil
+	}
+	byPhone, err := s.userRepo.GetByPhone(ctx, phone)
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("lookup user by phone: %w", err)
+	}
+	if byPhone != nil {
+		return byPhone.DisplayID, false, nil
+	}
+	return uuid.Nil, false, errValidation(
+		"Нет пользователя с таким номером. Укажите номер владельца наклейки или зарегистрируйтесь.",
+		map[string]string{"phone": "Номер не найден в системе"},
+	)
+}
+
 // Register claims a QR code for the given phone number.
 // If the user does not exist, they are created with the phone only.
 // A blank vehicle is created and linked to the QR so the owner can fill in
 // details afterwards via UpdateOwnerProfile / UpdateOwnerVehicle.
+// If the QR is already registered (active), resolves user id: owner phone, or any existing account with the same phone.
 func (s *APISpecService) Register(ctx context.Context, in QRRegisterInput) (userID uuid.UUID, isNewUser bool, err error) {
 	phone := strings.TrimSpace(in.Phone)
 	if phone == "" {
@@ -195,6 +235,10 @@ func (s *APISpecService) Register(ctx context.Context, in QRRegisterInput) (user
 	}
 	if qr == nil || qr.Status == types.QRStatusBlocked {
 		return uuid.Nil, false, errNotFound("QR код не найден")
+	}
+	// Уже привязан к машине — после OTP выдаём тот же ответ, что и при первой регистрации (токен + user_id).
+	if qr.Status == types.QRStatusActive && qr.VehicleID != nil {
+		return s.loginExistingQROwner(ctx, qr, phone)
 	}
 	if qr.Status != types.QRStatusUnregistered || qr.VehicleID != nil {
 		return uuid.Nil, false, errValidation("QR код уже зарегистрирован", map[string]string{"qr_id": "Уже зарегистрирован"})
